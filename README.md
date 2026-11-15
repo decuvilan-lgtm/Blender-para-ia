@@ -23,7 +23,7 @@ Laboratorio para experimentar, ejecutar y verificar Blender desde GitHub Actions
 4. Elige una operación (por defecto `create-demo`) y ejecuta.
 5. Descarga el artefacto `blender-session-evidence`.
 
-El workflow usa un runner Ubuntu hospedado por GitHub, un display virtual Xvfb y una instancia gráfica de Blender. La sesión termina automáticamente al alcanzar el límite configurado (máximo 10 minutos).
+El workflow usa un runner Ubuntu hospedado por GitHub, un display virtual Xvfb y una instancia gráfica de Blender. La ventana se mide desde el arranque de Blender y tiene un máximo de 10 minutos. Esta primera versión recibe una operación al iniciar la ejecución; todavía no ofrece una consola de órdenes en vivo desde otra ejecución o desde el chat. Para otra operación se abre una nueva sesión.
 
 ## Arquitectura
 
@@ -38,13 +38,13 @@ El workflow usa un runner Ubuntu hospedado por GitHub, un display virtual Xvfb y
 - El Bridge escucha únicamente en `127.0.0.1`.
 - No acepta código Python arbitrario por la red; solo operaciones explícitamente implementadas.
 - El token se pasa mediante variable de entorno y nunca se guarda en el repositorio.
-- Los runners hospedados de GitHub son efímeros. Una sesión no queda viva entre ejecuciones: al reabrirla se inicia otro Blender. La continuidad de escenas se hará mediante artefactos guardados.
+- Los runners hospedados de GitHub son efímeros. Una sesión no queda viva entre ejecuciones: al reabrirla se inicia otro Blender. La escena se guarda automáticamente como artefacto para poder restaurarla en una fase posterior. El paquete experimental contiene scripts y bootstrap; descarga Blender al prepararse y no incluye el binario de más de 1 GB.
 - Un workflow_dispatch abre una sesión y ejecuta la orden seleccionada en esa misma ejecución. El cliente y Blender comparten runner y `localhost`; otra ejecución independiente no puede conectarse al localhost de un runner anterior.
 
 ## Versiones
 
 La primera prueba fija Blender 4.5.3 para que los resultados sean reproducibles. La versión podrá actualizarse tras validar compatibilidad.
 
-## Licencia
+## Licencias
 
-El código original de este proyecto se publica bajo GPL-3.0-or-later. Blender y sus componentes conservan sus respectivas licencias; esta fase no copia ni redistribuye el código fuente de Blender.
+Esta fase no copia ni redistribuye el código fuente de Blender. Antes de incorporar o distribuir partes del proyecto original, se documentarán las licencias y obligaciones aplicables a cada componente.
