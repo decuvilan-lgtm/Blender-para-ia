@@ -1,0 +1,155 @@
+name: Blender GUI Session
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Operation to execute in the active Blender GUI session"
+        required: true
+        type: choice
+        default: create-demo
+        options:
+          - ping
+          - scene-info
+          - create-demo
+          - render
+          - save
+      session_minutes:
+        description: "Maximum session duration (1-10 minutes)"
+        required: true
+        type: number
+        default: 10
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blender-gui-session
+  cancel-in-progress: false
+
+jobs:
+  blender-session:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate session duration
+        id: config
+        shell: bash
+        run: |
+          requested="${{ inputs.session_minutes }}"
+          if ! [[ "$requested" =~ ^[0-9]+$ ]]; then requested=10; fi
+          if (( requested < 1 )); then requested=1; fi
+          if (( requested > 10 )); then requested=10; fi
+          echo "minutes=$requested" >> "$GITHUB_OUTPUT"
+
+      - name: Install GUI and capture dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb x11-utils libgl1 libegl1 libxi6 libxrender1 libxkbcommon0 libxkbcommon-x11-0 libsm6 libxfixes3 ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install mss pillow
+
+      - name: Download pinned Blender build
+        env:
+          BLENDER_VERSION: "4.5.3"
+          BLENDER_MAJOR_MINOR: "4.5"
+        run: |
+          mkdir -p "$RUNNER_TEMP/blender"
+          curl --fail --location --retry 3 \
+            "https://download.blender.org/release/Blender${BLENDER_MAJOR_MINOR}/blender-${BLENDER_VERSION}-linux-x64.tar.xz" \
+            -o "$RUNNER_TEMP/blender/blender.tar.xz"
+          tar -xf "$RUNNER_TEMP/blender/blender.tar.xz" -C "$RUNNER_TEMP/blender"
+          echo "BLENDER_BIN=$(find "$RUNNER_TEMP/blender" -maxdepth 3 -type f -name blender -perm -u+x | head -n 1)" >> "$GITHUB_ENV"
+
+      - name: Start virtual desktop and Blender GUI
+        env:
+          BLENDER_BRIDGE_TOKEN: ${{ secrets.BLENDER_BRIDGE_TOKEN || github.run_id }}
+          BLENDER_BRIDGE_PORT: "8765"
+          BLENDER_ARTIFACT_DIR: ${{ runner.temp }}/blender-artifacts
+        run: |
+          mkdir -p "$BLENDER_ARTIFACT_DIR"
+          Xvfb :99 -screen 0 1600x900x24 -ac +extension GLX +render -noreset > "$RUNNER_TEMP/xvfb.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/xvfb.pid"
+          sleep 2
+          export DISPLAY=:99
+          "$BLENDER_BIN" --factory-startup --window-geometry 1600 900 0 0 \
+            --python session_system/blender_bridge/bridge.py \
+            > "$RUNNER_TEMP/blender.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/blender.pid"
+          echo "BLENDER_BRIDGE_TOKEN=$BLENDER_BRIDGE_TOKEN" >> "$GITHUB_ENV"
+          echo "BLENDER_BRIDGE_PORT=8765" >> "$GITHUB_ENV"
+          echo "BLENDER_ARTIFACT_DIR=$BLENDER_ARTIFACT_DIR" >> "$GITHUB_ENV"
+
+      - name: Wait for Blender Bridge
+        shell: bash
+        run: |
+          for attempt in $(seq 1 60); do
+            if python session_system/repo_headless/client.py ping --timeout 3; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Blender Bridge did not become ready." >&2
+          cat "$RUNNER_TEMP/blender.log" || true
+          exit 1
+
+      - name: Execute requested operation through repository headless client
+        run: |
+          python session_system/repo_headless/client.py "${{ inputs.command }}" --timeout 120
+
+      - name: Capture desktop and short evidence video
+        if: always()
+        env:
+          DISPLAY: ":99"
+        run: |
+          mkdir -p "$BLENDER_ARTIFACT_DIR"
+          if [[ -f "$RUNNER_TEMP/blender.pid" ]] && kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; then
+            python session_system/scripts/capture_screen.py "$BLENDER_ARTIFACT_DIR/desktop.png" || true
+            ffmpeg -y -loglevel error -f x11grab -video_size 1600x900 -framerate 8 -i :99.0 -t 5 \
+              -pix_fmt yuv420p "$BLENDER_ARTIFACT_DIR/session-preview.mp4" || true
+          fi
+
+      - name: Keep session alive for configured duration
+        if: success()
+        run: |
+          elapsed=0
+          target=$(( ${{ steps.config.outputs.minutes }} * 60 ))
+          # Reserve time already spent in setup/operation; the job's session window is capped at 10 min.
+          while (( elapsed < target )); do
+            if ! kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; then
+              echo "Blender exited before the session window ended."
+              exit 1
+            fi
+            sleep 10
+            elapsed=$((elapsed + 10))
+          done
+
+      - name: Stop Blender and virtual display
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/blender.pid" ]]; then kill "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || true; fi
+          if [[ -f "$RUNNER_TEMP/xvfb.pid" ]]; then kill "$(cat "$RUNNER_TEMP/xvfb.pid")" 2>/dev/null || true; fi
+
+      - name: Package experimental lab
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          cp -R ai_lab/experimental "$RUNNER_TEMP/package/"
+          cp -R session_system "$RUNNER_TEMP/package/"
+          tar -czf "$RUNNER_TEMP/experimental-blender-lab.tar.gz" -C "$RUNNER_TEMP/package" .
+
+      - name: Upload session evidence and lab
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-session-evidence
+          path: |
+            ${{ runner.temp }}/blender-artifacts/
+            ${{ runner.temp }}/blender.log
+            ${{ runner.temp }}/xvfb.log
+            ${{ runner.temp }}/experimental-blender-lab.tar.gz
+          if-no-files-found: warn
+          retention-days: 14
