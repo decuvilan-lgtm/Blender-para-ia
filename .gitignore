@@ -1,0 +1,17 @@
+# Runtime and generated evidence
+artifacts/
+session_system/runtime/
+*.blend1
+*.log
+*.mp4
+*.png
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local Blender downloads
+.blender/
+blender-*/
