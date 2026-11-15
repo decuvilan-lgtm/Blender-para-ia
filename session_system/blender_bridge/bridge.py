@@ -131,7 +131,9 @@ def _server_loop():
                 if not TOKEN or not secrets.compare_digest(supplied, TOKEN):
                     _send(conn, {"ok": False, "error": "unauthorized"})
                     continue
-                _REQUESTS.put((request, conn.dup()))
+                response_conn = conn.dup()
+                response_conn.settimeout(300)
+                _REQUESTS.put((request, response_conn))
                 # The duplicate is answered by the Blender main-thread timer.
             except Exception as exc:
                 try:
