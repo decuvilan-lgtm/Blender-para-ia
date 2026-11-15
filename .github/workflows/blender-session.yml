@@ -151,7 +151,7 @@ jobs:
           cp -R session_system "$RUNNER_TEMP/package/"
           tar -czf "$RUNNER_TEMP/experimental-blender-lab.tar.gz" -C "$RUNNER_TEMP/package" .
 
-      - name: Upload session evidence and lab
+      - name: Upload session evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -160,6 +160,14 @@ jobs:
             ${{ runner.temp }}/blender-artifacts/
             ${{ runner.temp }}/blender.log
             ${{ runner.temp }}/xvfb.log
-            ${{ runner.temp }}/experimental-blender-lab.tar.gz
           if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload experimental headless lab
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-blender-headless
+          path: ${{ runner.temp }}/experimental-blender-lab.tar.gz
+          if-no-files-found: error
           retention-days: 14
