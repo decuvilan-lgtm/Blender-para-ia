@@ -1,6 +1,9 @@
 name: Blender GUI Session
 
 on:
+  push:
+    branches:
+      - validation/gui-smoke-2026-11-16
   workflow_dispatch:
     inputs:
       command:
@@ -44,7 +47,7 @@ jobs:
         id: config
         shell: bash
         env:
-          REQUESTED_MINUTES: ${{ inputs.session_minutes }}
+          REQUESTED_MINUTES: ${{ inputs.session_minutes || '1' }}
           REQUESTED_PROJECT: ${{ inputs.project_path }}
         run: |
           requested="$REQUESTED_MINUTES"
@@ -163,7 +166,7 @@ jobs:
 
       - name: Execute requested operation through repository headless client
         env:
-          BLENDER_COMMAND: ${{ inputs.command }}
+          BLENDER_COMMAND: ${{ inputs.command || 'scene-info' }}
         run: |
           "$PYTHON_BIN" session_system/repo_headless/client.py "$BLENDER_COMMAND" --timeout 180
           if [[ "$BLENDER_COMMAND" != "save" ]]; then
