@@ -29,6 +29,7 @@ on:
         default: 10
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -43,12 +44,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Download prior Blender project fixture
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: blender-session-evidence
+          run-id: 43798586367
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/prior-evidence
+
+      - name: Stage project fixture
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          mkdir -p projects/inbox
+          cp "$RUNNER_TEMP/prior-evidence/blender-artifacts/session-project.blend" projects/inbox/bridge-smoke.blend
+          test -s projects/inbox/bridge-smoke.blend
+
       - name: Validate inputs
         id: config
         shell: bash
         env:
           REQUESTED_MINUTES: ${{ inputs.session_minutes || '1' }}
-          REQUESTED_PROJECT: ${{ inputs.project_path }}
+          REQUESTED_PROJECT: ${{ inputs.project_path || 'projects/inbox/bridge-smoke.blend' }}
         run: |
           requested="$REQUESTED_MINUTES"
           if ! [[ "$requested" =~ ^[0-9]+$ ]]; then requested=10; fi
@@ -184,7 +202,7 @@ jobs:
 
       - name: Execute requested operation through repository headless client
         env:
-          BLENDER_COMMAND: ${{ inputs.command || 'create-demo' }}
+          BLENDER_COMMAND: ${{ inputs.command || 'scene-info' }}
         run: |
           "$PYTHON_BIN" session_system/repo_headless/client.py "$BLENDER_COMMAND" --timeout 180
           if [[ "$BLENDER_COMMAND" != "save" ]]; then
