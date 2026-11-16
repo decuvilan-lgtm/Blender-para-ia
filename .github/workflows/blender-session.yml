@@ -85,7 +85,7 @@ jobs:
           BLENDER_MAJOR_MINOR: "4.5"
         run: |
           mkdir -p "$RUNNER_TEMP/blender"
-          curl --fail --location --retry 3 \
+          curl --fail --location --retry 3 --retry-all-errors --retry-delay 5 \
             "https://download.blender.org/release/Blender${BLENDER_MAJOR_MINOR}/blender-${BLENDER_VERSION}-linux-x64.tar.xz" \
             -o "$RUNNER_TEMP/blender/blender.tar.xz"
           tar -xf "$RUNNER_TEMP/blender/blender.tar.xz" -C "$RUNNER_TEMP/blender"
