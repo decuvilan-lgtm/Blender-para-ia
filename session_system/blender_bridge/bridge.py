@@ -33,6 +33,9 @@ def _scene_info():
     scene = bpy.context.scene
     return {
         "scene": scene.name,
+        "project_file": bpy.data.filepath or None,
+        "active_camera": scene.camera.name if scene.camera else None,
+        "object_count": len(scene.objects),
         "objects": [
             {"name": obj.name, "type": obj.type, "location": [round(float(v), 4) for v in obj.location]}
             for obj in scene.objects
