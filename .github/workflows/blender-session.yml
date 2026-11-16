@@ -73,7 +73,7 @@ jobs:
       - name: Install GUI, software OpenGL and capture dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb openbox x11-utils x11-xserver-utils mesa-utils libgl1-mesa-dri libgl1 libegl1 libxi6 libxrender1 libxkbcommon0 libxkbcommon-x11-0 libsm6 libxfixes3 ffmpeg
+          sudo apt-get install -y xvfb openbox wmctrl xdotool x11-utils x11-xserver-utils mesa-utils libgl1-mesa-dri libgl1 libegl1 libxi6 libxrender1 libxkbcommon0 libxkbcommon-x11-0 libsm6 libxfixes3 ffmpeg
           python -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --upgrade pip
           "$RUNNER_TEMP/venv/bin/pip" install mss pillow
@@ -116,7 +116,7 @@ jobs:
           sleep 2
           glxinfo -B > "$RUNNER_TEMP/glxinfo.log" 2>&1 || true
 
-          blender_args=(--window-geometry 1600 900 0 0)
+          blender_args=(--window-geometry 0 0 1600 900 --window-maximized)
           if [[ -n "$PROJECT_PATH" ]]; then
             blender_args=("$PROJECT_PATH" "${blender_args[@]}")
           else
@@ -131,12 +131,30 @@ jobs:
           echo "BLENDER_SESSION_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
 
           sleep 8
+          window_id="$(wmctrl -l | awk 'tolower($0) ~ /blender/ {print $1; exit}')"
+          if [[ -z "$window_id" ]]; then
+            echo "Blender X11 window was not found by wmctrl." >&2
+            wmctrl -l || true
+            exit 1
+          fi
+          wmctrl -ir "$window_id" -b add,maximized_vert,maximized_horz
+          xdotool windowactivate --sync "$window_id"
+          xdotool key --clearmodifiers Escape
+          sleep 3
+          wmctrl -lG > "$RUNNER_TEMP/windows-geometry.txt"
           xwininfo -display :99 -root -tree > "$RUNNER_TEMP/windows.txt" 2>&1 || true
+          if ! awk 'tolower($0) ~ /blender/ && $5 >= 1400 && $6 >= 750 {ok=1} END {exit !ok}' "$RUNNER_TEMP/windows-geometry.txt"; then
+            echo "Blender window did not occupy the expected desktop area." >&2
+            cat "$RUNNER_TEMP/windows-geometry.txt"
+            exit 1
+          fi
           {
             echo "DISPLAY=:99"
             echo "LIBGL_ALWAYS_SOFTWARE=$LIBGL_ALWAYS_SOFTWARE"
             echo "GALLIUM_DRIVER=$GALLIUM_DRIVER"
+            echo "BLENDER_WINDOW_ID=$window_id"
           } > "$RUNNER_TEMP/display-diagnostics.txt"
+          cat "$RUNNER_TEMP/windows-geometry.txt"
           cat "$RUNNER_TEMP/windows.txt"
 
       - name: Wait for Blender Bridge
