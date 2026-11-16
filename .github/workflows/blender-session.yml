@@ -7,13 +7,18 @@ on:
         description: "Operation to execute in the active Blender GUI session"
         required: true
         type: choice
-        default: create-demo
+        default: scene-info
         options:
           - ping
           - scene-info
           - create-demo
           - render
           - save
+      project_path:
+        description: "Optional .blend file committed to the repository (for example projects/inbox/test.blend)"
+        required: false
+        type: string
+        default: ""
       session_minutes:
         description: "Maximum session duration (1-10 minutes)"
         required: true
@@ -35,20 +40,37 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate session duration
+      - name: Validate inputs
         id: config
         shell: bash
+        env:
+          REQUESTED_MINUTES: ${{ inputs.session_minutes }}
+          REQUESTED_PROJECT: ${{ inputs.project_path }}
         run: |
-          requested="${{ inputs.session_minutes }}"
+          requested="$REQUESTED_MINUTES"
           if ! [[ "$requested" =~ ^[0-9]+$ ]]; then requested=10; fi
           if (( requested < 1 )); then requested=1; fi
           if (( requested > 10 )); then requested=10; fi
           echo "minutes=$requested" >> "$GITHUB_OUTPUT"
 
-      - name: Install GUI and capture dependencies
+          project="$REQUESTED_PROJECT"
+          if [[ -n "$project" ]]; then
+            case "$project" in
+              /*|*..*|*\\*) echo "Unsafe project_path: $project" >&2; exit 1 ;;
+            esac
+            [[ "$project" == *.blend ]] || { echo "project_path must end in .blend" >&2; exit 1; }
+            [[ -f "$project" ]] || { echo "Project not found in repository: $project" >&2; exit 1; }
+            echo "project=$project" >> "$GITHUB_OUTPUT"
+            echo "Loading project: $project"
+          else
+            echo "project=" >> "$GITHUB_OUTPUT"
+            echo "No project supplied; Blender will open its factory startup scene."
+          fi
+
+      - name: Install GUI, software OpenGL and capture dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb x11-utils libgl1 libegl1 libxi6 libxrender1 libxkbcommon0 libxkbcommon-x11-0 libsm6 libxfixes3 ffmpeg
+          sudo apt-get install -y xvfb openbox x11-utils x11-xserver-utils mesa-utils libgl1-mesa-dri libgl1 libegl1 libxi6 libxrender1 libxkbcommon0 libxkbcommon-x11-0 libsm6 libxfixes3 ffmpeg
           python -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --upgrade pip
           "$RUNNER_TEMP/venv/bin/pip" install mss pillow
@@ -71,20 +93,48 @@ jobs:
           BLENDER_BRIDGE_TOKEN: ${{ secrets.BLENDER_BRIDGE_TOKEN || github.run_id }}
           BLENDER_BRIDGE_PORT: "8765"
           BLENDER_ARTIFACT_DIR: ${{ runner.temp }}/blender-artifacts
+          PROJECT_PATH: ${{ steps.config.outputs.project }}
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p "$BLENDER_ARTIFACT_DIR"
-          Xvfb :99 -screen 0 1600x900x24 -ac +extension GLX +render -noreset > "$RUNNER_TEMP/xvfb.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/xvfb.pid"
-          sleep 2
           export DISPLAY=:99
-          "$BLENDER_BIN" --factory-startup --window-geometry 1600 900 0 0 \
-            --python session_system/blender_bridge/bridge.py \
-            > "$RUNNER_TEMP/blender.log" 2>&1 &
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export GALLIUM_DRIVER=llvmpipe
+          Xvfb :99 -screen 0 1600x900x24 +extension GLX +render -noreset > "$RUNNER_TEMP/xvfb.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/xvfb.pid"
+          for attempt in $(seq 1 30); do
+            xdpyinfo -display :99 >/dev/null 2>&1 && break
+            sleep 1
+          done
+          xdpyinfo -display :99 >/dev/null
+          openbox > "$RUNNER_TEMP/openbox.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/openbox.pid"
+          sleep 2
+          glxinfo -B > "$RUNNER_TEMP/glxinfo.log" 2>&1 || true
+
+          blender_args=(--window-geometry 1600 900 0 0)
+          if [[ -n "$PROJECT_PATH" ]]; then
+            blender_args=("$PROJECT_PATH" "${blender_args[@]}")
+          else
+            blender_args=(--factory-startup "${blender_args[@]}")
+          fi
+          blender_args+=(--python session_system/blender_bridge/bridge.py)
+          "$BLENDER_BIN" "${blender_args[@]}" > "$RUNNER_TEMP/blender.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/blender.pid"
           echo "BLENDER_BRIDGE_TOKEN=$BLENDER_BRIDGE_TOKEN" >> "$GITHUB_ENV"
           echo "BLENDER_BRIDGE_PORT=8765" >> "$GITHUB_ENV"
           echo "BLENDER_ARTIFACT_DIR=$BLENDER_ARTIFACT_DIR" >> "$GITHUB_ENV"
           echo "BLENDER_SESSION_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+          sleep 8
+          xwininfo -display :99 -root -tree > "$RUNNER_TEMP/windows.txt" 2>&1 || true
+          {
+            echo "DISPLAY=:99"
+            echo "LIBGL_ALWAYS_SOFTWARE=$LIBGL_ALWAYS_SOFTWARE"
+            echo "GALLIUM_DRIVER=$GALLIUM_DRIVER"
+          } > "$RUNNER_TEMP/display-diagnostics.txt"
+          cat "$RUNNER_TEMP/windows.txt"
 
       - name: Wait for Blender Bridge
         shell: bash
@@ -97,25 +147,35 @@ jobs:
           done
           echo "Blender Bridge did not become ready." >&2
           cat "$RUNNER_TEMP/blender.log" || true
+          cat "$RUNNER_TEMP/xvfb.log" || true
           exit 1
 
       - name: Execute requested operation through repository headless client
+        env:
+          BLENDER_COMMAND: ${{ inputs.command }}
         run: |
-          "$PYTHON_BIN" session_system/repo_headless/client.py "${{ inputs.command }}" --timeout 180
-          if [[ "${{ inputs.command }}" != "save" ]]; then
+          "$PYTHON_BIN" session_system/repo_headless/client.py "$BLENDER_COMMAND" --timeout 180
+          if [[ "$BLENDER_COMMAND" != "save" ]]; then
             "$PYTHON_BIN" session_system/repo_headless/client.py save --timeout 180
           fi
 
-      - name: Capture desktop and short evidence video
+      - name: Capture and validate desktop and short evidence video
         if: always()
         env:
           DISPLAY: ":99"
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p "$BLENDER_ARTIFACT_DIR"
           if [[ -f "$RUNNER_TEMP/blender.pid" ]] && kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; then
-            "$PYTHON_BIN" session_system/scripts/capture_screen.py "$BLENDER_ARTIFACT_DIR/desktop.png" || true
+            "$PYTHON_BIN" session_system/scripts/capture_screen.py "$BLENDER_ARTIFACT_DIR/desktop.png"
             ffmpeg -y -loglevel error -f x11grab -video_size 1600x900 -framerate 8 -i :99.0 -t 5 \
-              -pix_fmt yuv420p "$BLENDER_ARTIFACT_DIR/session-preview.mp4" || true
+              -pix_fmt yuv420p "$BLENDER_ARTIFACT_DIR/session-preview.mp4"
+            ffmpeg -y -loglevel error -i "$BLENDER_ARTIFACT_DIR/session-preview.mp4" -frames:v 1 "$BLENDER_ARTIFACT_DIR/video-first-frame.png"
+            "$PYTHON_BIN" -c 'from PIL import Image,ImageStat; import sys; im=Image.open(sys.argv[1]).convert("RGB"); s=ImageStat.Stat(im); mean=sum(s.mean)/3; std=sum(s.stddev)/3; print(f"Video frame mean={mean:.2f}, stddev={std:.2f}"); sys.exit(1 if mean < 2 or std < 1 else 0)' "$BLENDER_ARTIFACT_DIR/video-first-frame.png"
+          else
+            echo "Blender process is not alive; visual evidence cannot be captured." >&2
+            exit 1
           fi
 
       - name: Keep session alive for configured duration
@@ -141,6 +201,7 @@ jobs:
         if: always()
         run: |
           if [[ -f "$RUNNER_TEMP/blender.pid" ]]; then kill "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || true; fi
+          if [[ -f "$RUNNER_TEMP/openbox.pid" ]]; then kill "$(cat "$RUNNER_TEMP/openbox.pid")" 2>/dev/null || true; fi
           if [[ -f "$RUNNER_TEMP/xvfb.pid" ]]; then kill "$(cat "$RUNNER_TEMP/xvfb.pid")" 2>/dev/null || true; fi
 
       - name: Package experimental lab
@@ -148,7 +209,6 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/package"
           cp -R ai_lab/experimental "$RUNNER_TEMP/package/"
-          cp -R session_system "$RUNNER_TEMP/package/"
           tar -czf "$RUNNER_TEMP/experimental-blender-lab.tar.gz" -C "$RUNNER_TEMP/package" .
 
       - name: Upload session evidence
@@ -160,6 +220,10 @@ jobs:
             ${{ runner.temp }}/blender-artifacts/
             ${{ runner.temp }}/blender.log
             ${{ runner.temp }}/xvfb.log
+            ${{ runner.temp }}/openbox.log
+            ${{ runner.temp }}/glxinfo.log
+            ${{ runner.temp }}/windows.txt
+            ${{ runner.temp }}/display-diagnostics.txt
           if-no-files-found: warn
           retention-days: 14
 
