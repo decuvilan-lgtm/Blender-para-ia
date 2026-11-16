@@ -15,21 +15,22 @@ La transferencia de archivos es explícita. A no abre sockets hacia B y B no con
 
 ## Blender persistente para el entorno A
 
-El binario oficial **Blender 4.5.3 Linux x64** ya está publicado en una GitHub Release permanente, separado del historial de código:
+El binario oficial **Blender 4.5.3 Linux x64** está publicado en una GitHub Release permanente, separado del historial de código:
 
 - [Release Blender 4.5.3 — Runtime A](https://github.com/decuvilan-lgtm/Blender-para-ia/releases/tag/blender-4.5.3-linux-x64)
 - Asset: `blender-4.5.3-linux-x64.tar.xz` (377.397.328 bytes).
-- SHA-256 verificado: `975c58fcb244273838534bba771e64ad87739216b0f9b39a888531a49a72d845`.
-- El workflow `.github/workflows/preserve-blender-runtime.yml` descarga el binario desde el distribuidor oficial, verifica su manifiesto SHA-256 y lo publica como Release asset.
-- El bootstrap de A descarga desde GitHub, verifica de nuevo el SHA-256 y extrae la instalación en la caché local. Así A no depende del CDN oficial para obtener el binario.
+- SHA-256: `975c58fcb244273838534bba771e64ad87739216b0f9b39a888531a49a72d845`.
+- El workflow de preservación publica el asset; el bootstrap de A lo descarga desde GitHub y verifica su hash antes de extraerlo.
 
 ## Estado actual
 
 **B está validado visualmente**: Blender 4.5.3 abre en el escritorio virtual 1600×900, el Bridge local ejecuta operaciones `bpy`, y las capturas PNG/MP4 muestran la escena. [Evidencia de smoke test](https://github.com/decuvilan-lgtm/Blender-para-ia/actions/runs/43798586367/artifacts/14195532049).
 
-**A ya tiene el binario preservado en GitHub y el bootstrap preparado para recuperarlo.** Falta ejecutar el bootstrap y comprobar Blender real dentro del runtime A, crear allí el proyecto de validación y completar el traspaso de ese archivo a B. La publicación del asset no se considera una prueba de ejecución en A.
+**A tiene el runtime preservado y los artefactos de transferencia materializados**, pero la ejecución real de Blender dentro de A sigue pendiente. El workflow de transferencia [43805163265](https://github.com/decuvilan-lgtm/Blender-para-ia/actions/runs/43805163265) terminó correctamente y sus cinco partes más el manifiesto están en `/mnt/data/blender-transfer-run438051/`. La herramienta de shell/Python de A está devolviendo un error de infraestructura; por eso no se afirma que Blender ya esté instalado ni ejecutándose en A.
 
-## Blender GUI en GitHub Actions
+La guía exacta y el procedimiento para continuar están en [docs/environment-a-install.md](docs/environment-a-install.md). El ensamblador/instalador verificador está en [ai_lab/experimental/assemble_transferred_runtime.sh](ai_lab/experimental/assemble_transferred_runtime.sh).
+
+## Blender GUI en GitHub Actions (B)
 
 1. Abre **Actions**.
 2. Selecciona **Blender GUI Session**.
@@ -37,15 +38,15 @@ El binario oficial **Blender 4.5.3 Linux x64** ya está publicado en una GitHub 
 4. Selecciona una operación y ejecuta.
 5. Descarga `blender-session-evidence` y revisa capturas, vídeo, proyecto y logs.
 
-Si transferiste un `.blend` al repositorio, completa `project_path` con su ruta exacta. La sesión GUI B dura como máximo 10 minutos por ejecución; los proyectos deben guardarse y transferirse/restaurarse explícitamente.
+Si transferiste un `.blend`, completa `project_path` con su ruta exacta. La sesión GUI B dura como máximo 10 minutos por ejecución; los proyectos deben guardarse y transferirse/restaurarse explícitamente.
 
 ## Componentes
 
-- `ai_lab/experimental/`: bootstrap y launcher del entorno A.
+- `ai_lab/experimental/`: bootstrap, launcher y ensamblador/instalador de A.
 - `session_system/blender_bridge/`: Bridge Python dentro de Blender GUI B.
 - `session_system/repo_headless/`: controlador headless del repositorio para B.
 - `session_system/scripts/`: captura y validación de evidencias.
-- `.github/workflows/`: ciclo de vida de B y preservación del binario A.
+- `.github/workflows/`: ciclo de vida de B y preservación/transferencia del binario A.
 
 ## Seguridad y límites
 
@@ -54,12 +55,3 @@ Si transferiste un `.blend` al repositorio, completa `project_path` con su ruta 
 - El entorno A no utiliza el Bridge ni el cliente B.
 - El binario de Blender se conserva como Release asset, no dentro del historial Git.
 - Blender se distribuye bajo sus licencias aplicables; el proyecto conserva la procedencia oficial y el checksum del binario.
-
-
-### Instalar Blender en el entorno A del asistente
-
-La descarga directa del CDN oficial puede no estar disponible desde el runtime experimental. El procedimiento alternativo ya está preparado y el puente de transferencia fue probado: Actions descarga la Release permanente, verifica el SHA-256 y divide el archivo en cinco artefactos pequeños; el conector de GitHub los descarga y se materializan en el espacio de trabajo de A.
-
-**Guía visible y pasos exactos:** [docs/environment-a-install.md](docs/environment-a-install.md).
-
-Estado: los cinco fragmentos ya se transfirieron al almacenamiento de trabajo de A. La unión, extracción y ejecución de Blender aún están pendientes de una sesión de shell funcional; no se declara instalado hasta que `blender --version` y la prueba `A_RUNTIME_OK 4.5.3` pasen dentro de A.
