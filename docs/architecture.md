@@ -81,12 +81,12 @@ Inspección → correcciones en A → nueva transferencia
 
 | Capacidad | Estado |
 |---|---|
-| A: launcher headless independiente | Scripts implementados; falta validar ejecución en el entorno destino |
-| A → repositorio: transferencia automática de proyectos | Pendiente |
-| B: Blender GUI en Actions | Arranca, pero la captura visual inicial fue negra |
+| A: launcher headless independiente | Scripts y generador/validador escritos; sintaxis comprobada, ejecución Blender A pendiente |
+| A → repositorio: transferencia automática de proyectos | Pendiente; B ya acepta la ruta de un .blend versionado mediante project_path |
+| B: Blender GUI en Actions | Verificado visualmente en smoke test: ventana maximizada a 1600×900 |
 | Headless B → Blender GUI B por Bridge local | Prueba inicial parcial |
 | Órdenes remotas desde el agente durante una sesión | Pendiente |
-| Capturas y vídeo verificados | Pendiente; la primera captura no pasó |
+| Capturas y vídeo verificados | Verificados: PNG y fotograma MP4 1600×900, 5 s H.264; inspección visual correcta |
 | Restauración de proyectos transferidos | Pendiente de completar y probar |
 
 Este documento es el contrato técnico de referencia. Si un workflow, script o README contradice estas reglas, debe corregirse el código/documento; no se debe reinterpretar la arquitectura para justificarlo.
