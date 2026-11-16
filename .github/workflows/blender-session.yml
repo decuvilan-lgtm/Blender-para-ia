@@ -184,7 +184,7 @@ jobs:
 
       - name: Execute requested operation through repository headless client
         env:
-          BLENDER_COMMAND: ${{ inputs.command || 'scene-info' }}
+          BLENDER_COMMAND: ${{ inputs.command || 'create-demo' }}
         run: |
           "$PYTHON_BIN" session_system/repo_headless/client.py "$BLENDER_COMMAND" --timeout 180
           if [[ "$BLENDER_COMMAND" != "save" ]]; then
