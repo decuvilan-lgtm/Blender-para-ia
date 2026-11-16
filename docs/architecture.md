@@ -84,7 +84,7 @@ Inspección → correcciones en A → nueva transferencia
 | A: launcher headless independiente | Scripts y generador/validador escritos; sintaxis comprobada, ejecución Blender A pendiente |
 | A → repositorio: transferencia automática de proyectos | Pendiente; B ya acepta la ruta de un .blend versionado mediante project_path |
 | B: Blender GUI en Actions | Verificado visualmente en smoke test: ventana maximizada a 1600×900 |
-| Headless B → Blender GUI B por Bridge local | Prueba inicial parcial |
+| Headless B → Blender GUI B por Bridge local | Verificado: ping, scene-info y create-demo ejecutados en la instancia gráfica |
 | Órdenes remotas desde el agente durante una sesión | Pendiente |
 | Capturas y vídeo verificados | Verificados: PNG y fotograma MP4 1600×900, 5 s H.264; inspección visual correcta |
 | Restauración de proyectos transferidos | Pendiente de completar y probar |
