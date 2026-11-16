@@ -150,6 +150,17 @@ jobs:
           cat "$RUNNER_TEMP/xvfb.log" || true
           exit 1
 
+      - name: Verify Blender GUI window exists
+        shell: bash
+        run: |
+          cat "$RUNNER_TEMP/windows.txt"
+          if ! grep -qi "Blender" "$RUNNER_TEMP/windows.txt"; then
+            echo "A Blender window was not found in the X11 window tree." >&2
+            cat "$RUNNER_TEMP/blender.log" || true
+            cat "$RUNNER_TEMP/openbox.log" || true
+            exit 1
+          fi
+
       - name: Execute requested operation through repository headless client
         env:
           BLENDER_COMMAND: ${{ inputs.command }}
