@@ -34,6 +34,14 @@ El primer inicio descarga Blender 4.5.3 en la caché local. Las siguientes ejecu
 
 El script crea una escena con suelo, cubo, esfera, toroide, rótulo, cámara y luces. Guarda el proyecto `.blend` y renderiza una imagen PNG junto a él. Es una escena de diagnóstico deliberadamente reconocible para comprobar que B abrió el archivo correcto y que el render no está vacío.
 
+Valida el archivo desde el propio Blender headless A:
+
+```bash
+./run_headless.sh "$PWD/output/validation-scene.blend" --python "$PWD/scripts/validate_project.py"
+```
+
+La validación comprueba la ruta del proyecto, la cámara y los objetos de prueba esperados.
+
 ## Transferir a B
 
 1. Comprueba que el `.blend` y su PNG existan y tengan tamaño no nulo.
