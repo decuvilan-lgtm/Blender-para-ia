@@ -17,7 +17,7 @@ Consulta [docs/architecture.md](docs/architecture.md) para las responsabilidades
 
 ## Estado actual
 
-**Infraestructura en construcción.** La separación A/B está definida, pero el canal remoto interactivo y la transferencia automatizada todavía no están terminados. La primera captura fue negra por una configuración incorrecta de geometría de ventana. Tras corregirla, el smoke test `43798100974` terminó correctamente y se inspeccionaron el PNG y el primer fotograma del MP4: muestran Blender 4.5.3 ocupando el escritorio 1600×900. El test adicional `43798586367` también ejecutó `create-demo` mediante el controlador B y la captura muestra los objetos generados. Esto valida GUI, Bridge local, operación `bpy` y evidencias; la ejecución real del laboratorio A y la transferencia de un proyecto creado allí siguen pendientes.
+**Infraestructura en construcción.** La separación A/B está definida, pero el canal remoto interactivo y la transferencia automatizada todavía no están terminados. La primera captura fue negra por una configuración incorrecta de geometría de ventana. Tras corregirla, el smoke test `43798100974` terminó correctamente y se inspeccionaron el PNG y el primer fotograma del MP4: muestran Blender 4.5.3 ocupando el escritorio 1600×900. El test adicional `43798586367` también ejecutó `create-demo` mediante el controlador B y la captura muestra los objetos generados. [Evidencia visual y logs de esa ejecución](https://github.com/decuvilan-lgtm/Blender-para-ia/actions/runs/43798586367/artifacts/14195532049). Esto valida GUI, Bridge local, operación `bpy` y evidencias; la ejecución real del laboratorio A y la transferencia de un proyecto creado allí siguen pendientes.
 
 No se considera superada una prueba visual si la imagen o el vídeo están vacíos, negros o no muestran la instancia Blender. El workflow debe fallar ante una captura PNG negra.
 
@@ -29,7 +29,7 @@ No se considera superada una prueba visual si la imagen o el vídeo están vací
 4. Selecciona una operación y ejecuta.
 5. Descarga `blender-session-evidence` y revisa las capturas, el vídeo, el proyecto y los logs.
 
-El runner hospedado es efímero. La sesión está limitada a un máximo configurable de 10 minutos; al finalizar, otra ejecución inicia una nueva instancia. Los proyectos deben guardarse y transferirse/restaurarse explícitamente.
+Si ya transferiste un `.blend` al repositorio (por ejemplo, a `projects/inbox/`), completa el campo opcional `project_path` con la ruta exacta antes de ejecutar. Blender GUI B abrirá ese archivo al arrancar; usa `scene-info` para inspeccionarlo sin borrar la escena. El runner hospedado es efímero. La sesión está limitada a un máximo configurable de 10 minutos; al finalizar, otra ejecución inicia una nueva instancia. Los proyectos deben guardarse y transferirse/restaurarse explícitamente.
 
 ## Componentes
 
