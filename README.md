@@ -13,41 +13,44 @@ El sistema contiene dos entornos distintos. No se deben fusionar ni conectar ent
 
 La transferencia de archivos es explícita. A no abre sockets hacia B y B no controla A. El archivo `.blend` es la frontera entre ambos entornos.
 
-Consulta [docs/architecture.md](docs/architecture.md) para las responsabilidades, el ciclo de transferencia, las reglas de aislamiento y el estado de las conexiones.
+## Blender persistente para el entorno A
+
+El binario oficial **Blender 4.5.3 Linux x64** ya está publicado en una GitHub Release permanente, separado del historial de código:
+
+- [Release Blender 4.5.3 — Runtime A](https://github.com/decuvilan-lgtm/Blender-para-ia/releases/tag/blender-4.5.3-linux-x64)
+- Asset: `blender-4.5.3-linux-x64.tar.xz` (377.397.328 bytes).
+- SHA-256 verificado: `975c58fcb244273838534bba771e64ad87739216b0f9b39a888531a49a72d845`.
+- El workflow `.github/workflows/preserve-blender-runtime.yml` descarga el binario desde el distribuidor oficial, verifica su manifiesto SHA-256 y lo publica como Release asset.
+- El bootstrap de A descarga desde GitHub, verifica de nuevo el SHA-256 y extrae la instalación en la caché local. Así A no depende del CDN oficial para obtener el binario.
 
 ## Estado actual
 
-**Infraestructura en construcción.** La separación A/B está definida, pero el canal remoto interactivo y la transferencia automatizada todavía no están terminados. La primera captura fue negra por una configuración incorrecta de geometría de ventana. Tras corregirla, el smoke test `43798100974` terminó correctamente y se inspeccionaron el PNG y el primer fotograma del MP4: muestran Blender 4.5.3 ocupando el escritorio 1600×900. El test adicional `43798586367` también ejecutó `create-demo` mediante el controlador B y la captura muestra los objetos generados. [Evidencia visual y logs de esa ejecución](https://github.com/decuvilan-lgtm/Blender-para-ia/actions/runs/43798586367/artifacts/14195532049). Esto valida GUI, Bridge local, operación `bpy` y evidencias; la ejecución real del laboratorio A y la transferencia de un proyecto creado allí siguen pendientes.
+**B está validado visualmente**: Blender 4.5.3 abre en el escritorio virtual 1600×900, el Bridge local ejecuta operaciones `bpy`, y las capturas PNG/MP4 muestran la escena. [Evidencia de smoke test](https://github.com/decuvilan-lgtm/Blender-para-ia/actions/runs/43798586367/artifacts/14195532049).
 
-No se considera superada una prueba visual si la imagen o el vídeo están vacíos, negros o no muestran la instancia Blender. El workflow debe fallar ante una captura PNG negra.
+**A ya tiene el binario preservado en GitHub y el bootstrap preparado para recuperarlo.** Falta ejecutar el bootstrap y comprobar Blender real dentro del runtime A, crear allí el proyecto de validación y completar el traspaso de ese archivo a B. La publicación del asset no se considera una prueba de ejecución en A.
 
 ## Blender GUI en GitHub Actions
 
-1. Abre la pestaña **Actions**.
+1. Abre **Actions**.
 2. Selecciona **Blender GUI Session**.
 3. Pulsa **Run workflow**.
 4. Selecciona una operación y ejecuta.
-5. Descarga `blender-session-evidence` y revisa las capturas, el vídeo, el proyecto y los logs.
+5. Descarga `blender-session-evidence` y revisa capturas, vídeo, proyecto y logs.
 
-Si ya transferiste un `.blend` al repositorio (por ejemplo, a `projects/inbox/`), completa el campo opcional `project_path` con la ruta exacta antes de ejecutar. Blender GUI B abrirá ese archivo al arrancar; usa `scene-info` para inspeccionarlo sin borrar la escena. El runner hospedado es efímero. La sesión está limitada a un máximo configurable de 10 minutos; al finalizar, otra ejecución inicia una nueva instancia. Los proyectos deben guardarse y transferirse/restaurarse explícitamente.
+Si transferiste un `.blend` al repositorio, completa `project_path` con su ruta exacta. La sesión GUI B dura como máximo 10 minutos por ejecución; los proyectos deben guardarse y transferirse/restaurarse explícitamente.
 
 ## Componentes
 
-- `ai_lab/experimental/`: bootstrap y launcher del entorno A; descarga Blender al prepararse y lo ejecuta en background, sin conexión con Actions.
-- `session_system/blender_bridge/`: Bridge Python cargado dentro de Blender GUI en B. Las llamadas `bpy` se ejecutan en el hilo principal.
-- `session_system/repo_headless/`: controlador headless del repositorio para la instancia B.
+- `ai_lab/experimental/`: bootstrap y launcher del entorno A.
+- `session_system/blender_bridge/`: Bridge Python dentro de Blender GUI B.
+- `session_system/repo_headless/`: controlador headless del repositorio para B.
 - `session_system/scripts/`: captura y validación de evidencias.
-- `.github/workflows/`: ciclo de vida de la instancia gráfica B.
+- `.github/workflows/`: ciclo de vida de B y preservación del binario A.
 
 ## Seguridad y límites
 
-- El Bridge escucha en `127.0.0.1` dentro del runner; esto solo permite conexiones desde procesos del mismo runner. **No equivale a un canal remoto desde el agente/chat.**
+- El Bridge escucha en `127.0.0.1` dentro del runner; no equivale a un canal remoto desde el agente/chat.
 - No se acepta código Python arbitrario por TCP; solo operaciones explícitamente permitidas.
-- El token se pasa mediante variable de entorno y no se guarda en el repositorio.
-- El controlador B y Blender GUI B comparten runner en la implementación actual. El control remoto desde fuera del runner sigue pendiente; no se debe afirmar que ya existe.
-- El entorno A no utiliza ese Bridge ni el cliente B.
-- El paquete experimental contiene scripts y descarga el binario oficial al prepararse; no se sube el ejecutable de Blender (más de 1 GB) al repositorio.
-
-## Versión y licencias
-
-La infraestructura fija Blender 4.5.3 para reproducibilidad. Esta fase no copia el código fuente completo de Blender al repositorio. Antes de redistribuir binarios o partes del proyecto se revisarán las licencias y obligaciones aplicables.
+- El entorno A no utiliza el Bridge ni el cliente B.
+- El binario de Blender se conserva como Release asset, no dentro del historial Git.
+- Blender se distribuye bajo sus licencias aplicables; el proyecto conserva la procedencia oficial y el checksum del binario.
