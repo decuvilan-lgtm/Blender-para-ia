@@ -1,6 +1,6 @@
 # Environment A — Blender runtime installation and transfer
 
-This is the visible, reproducible record for installing the persistent Blender runtime in the assistant's own experimental workspace (Environment A). Environment A is **not** the Blender GUI runner in GitHub Actions (Environment B).
+This guide records the reproducible installation of the pinned Blender runtime in the assistant's own experimental workspace (Environment A). Environment A is **not** the Blender GUI runner in GitHub Actions (Environment B).
 
 ## Permanent binary source
 
@@ -9,67 +9,53 @@ This is the visible, reproducible record for installing the persistent Blender r
 - Size: 377,397,328 bytes
 - SHA-256: `975c58fcb244273838534bba771e64ad87739216b0f9b39a888531a49a72d845`
 
-The Release asset is the durable copy. Actions artifacts below are only a temporary transport bridge (30-day retention), not the permanent source.
+The Release asset is the durable copy. Actions artifacts are only a temporary transport bridge (30-day retention), not the permanent source.
 
 ## Why the transfer uses chunks
 
-The assistant's file-materialization path accepts files up to 100 MiB. The 377 MB archive is therefore not materialized as one file. Instead, the repository workflow downloads the Release asset, verifies its official SHA-256, splits it into five 80 MiB-or-smaller pieces, and publishes five individual Actions artifacts plus a checksum artifact.
+The assistant's file-materialization path accepts files up to 100 MiB. The 377 MB archive cannot be materialized as one file. The repository workflow downloads the Release asset, verifies its SHA-256, splits it into five pieces of 80 MiB or less, and publishes five individual Actions artifacts plus a checksum artifact.
 
 Workflow: [export-blender-runtime-artifact.yml](../.github/workflows/export-blender-runtime-artifact.yml)
 
 ## Transfer procedure
 
 1. Run **Actions → Export Blender runtime for Environment A transfer** (or push a change to the workflow file).
-2. Wait for the workflow to finish successfully. It produces:
-   - `blender-runtime-part-00`
-   - `blender-runtime-part-01`
-   - `blender-runtime-part-02`
-   - `blender-runtime-part-03`
-   - `blender-runtime-part-04`
-   - `blender-runtime-parts-checksums`
-3. Download each artifact through the GitHub Actions artifact-download connector. The connector returns a file reference and places the ZIP in the current assistant session's file area.
-4. Materialize each ZIP into the assistant's working filesystem, for example under `/mnt/data/blender-transfer-parts/`. Keep each artifact separate; each is below the 100 MiB materialization limit.
-5. Assemble and verify the original archive:
+2. Wait for a successful run. It produces `blender-runtime-part-00` through `blender-runtime-part-04`, plus `blender-runtime-parts-checksums`.
+3. Download each artifact ZIP through the GitHub Actions artifact-download connector.
+4. Materialize the six ZIP files into one directory in A's working filesystem. Keep each ZIP separate; every artifact is below 100 MiB.
+5. Run the repository's assembly and installation script:
 
 ```bash
-set -euo pipefail
-cd /mnt/data/blender-transfer-parts
-mkdir -p extracted
-for f in blender-part-*.zip; do
-  unzip -oq "$f" -d extracted
-done
-unzip -oq blender-parts-checksums.zip -d extracted
-cd extracted
-sha256sum --check parts.sha256
-cat part-00 part-01 part-02 part-03 part-04 > ../blender-4.5.3-linux-x64.tar.xz
-cd ..
-echo "975c58fcb244273838534bba771e64ad87739216b0f9b39a888531a49a72d845  blender-4.5.3-linux-x64.tar.xz" | sha256sum --check
-test "$(stat -c%s blender-4.5.3-linux-x64.tar.xz)" -eq 377397328
+bash ai_lab/experimental/assemble_transferred_runtime.sh /path/to/directory-with-the-six-zip-files
 ```
 
-## Extract and execute in Environment A
+The script extracts the ZIPs, validates every chunk against `parts.sha256`, joins the original TAR.XZ, checks its full SHA-256 and exact byte size, extracts Blender into `~/.cache/blender-for-ai`, then runs both `blender --version` and a background Python smoke test.
 
-```bash
-set -euo pipefail
-INSTALL_ROOT="$HOME/.cache/blender-for-ai"
-mkdir -p "$INSTALL_ROOT"
-tar -xJf /mnt/data/blender-transfer-parts/blender-4.5.3-linux-x64.tar.xz -C "$INSTALL_ROOT"
-BLENDER_BIN="$INSTALL_ROOT/blender-4.5.3-linux-x64/blender"
-test -x "$BLENDER_BIN"
-"$BLENDER_BIN" --version
-"$BLENDER_BIN" --background --factory-startup --python-expr "import bpy; print('A_RUNTIME_OK', bpy.app.version_string)"
+For the transfer materialized during this session, the directory is:
+
+```text
+/mnt/data/blender-transfer-run438051
 ```
 
-A successful installation must show Blender 4.5.3 and print `A_RUNTIME_OK 4.5.3`. This is the acceptance test; merely downloading or extracting the archive is not proof that Blender executes.
+## Acceptance test
+
+Installation is considered successful only if the command prints Blender 4.5.3 and the background smoke test prints:
+
+```text
+A_RUNTIME_OK 4.5.3
+```
+
+A downloaded archive, a successful Actions run, or a Blender execution in Environment B does **not** count as proof that A can run Blender.
 
 ## Current transfer record (2026-11-16)
 
-- Permanent Release asset: verified present in GitHub; asset state `uploaded`, size and SHA-256 match the expected values.
+- Permanent Release asset: present in GitHub; size and SHA-256 match the pinned values above.
 - Transfer workflow run: [43805163265](https://github.com/decuvilan-lgtm/Blender-para-ia/actions/runs/43805163265) — completed successfully.
-- The five chunk artifacts and checksum artifact were downloaded through the GitHub connector and materialized into the assistant workspace at `/mnt/data/blender-transfer-parts/`.
-- **Not yet verified:** joining the chunks, extracting the TAR.XZ, running `blender --version`, or creating a real `.blend` in Environment A. The shell/Python execution service returned an infrastructure `ClientError` after materialization, so no execution result is claimed.
-- Once the runtime shell is available, continue from the assembly command above. Do not substitute Environment B for this test.
+- All five chunk artifacts and the checksum artifact from that exact run were downloaded and materialized in A at `/mnt/data/blender-transfer-run438051/`.
+- The assembly/installer script has been added at [ai_lab/experimental/assemble_transferred_runtime.sh](../ai_lab/experimental/assemble_transferred_runtime.sh).
+- **Still not verified:** joining the chunks, extracting the TAR.XZ, running Blender, or creating a real `.blend` in Environment A. The shell/Python execution service is returning an infrastructure `ClientError`; no installation or execution success is claimed.
+- Resume with the script above when A's shell execution is available. Do not substitute Environment B for this test.
 
 ## Keep the source durable
 
-The GitHub Release asset is permanent unless someone deletes the Release. Actions transfer artifacts expire after 30 days and must be regenerated by rerunning the export workflow. Do not commit the 377 MB binary or its chunks into Git history.
+The GitHub Release asset remains available unless the Release is deleted. Actions transfer artifacts expire after 30 days and can be regenerated by rerunning the export workflow. Do not commit the 377 MB binary or its chunks into Git history.
