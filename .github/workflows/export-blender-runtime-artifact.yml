@@ -26,7 +26,7 @@ jobs:
           echo "975c58fcb244273838534bba771e64ad87739216b0f9b39a888531a49a72d845  runtime-transfer/blender-4.5.3-linux-x64.tar.xz" | sha256sum --check
           test "$(stat -c%s runtime-transfer/blender-4.5.3-linux-x64.tar.xz)" -eq 377397328
           split -b 80M -d -a 2 runtime-transfer/blender-4.5.3-linux-x64.tar.xz runtime-transfer/part-
-          sha256sum runtime-transfer/part-* > runtime-transfer/parts.sha256
+          (cd runtime-transfer && sha256sum part-* > parts.sha256)
           test "$(find runtime-transfer -maxdepth 1 -name 'part-*' | wc -l)" -eq 5
 
       - name: Upload chunk 00
