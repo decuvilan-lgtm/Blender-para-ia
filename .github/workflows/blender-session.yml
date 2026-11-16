@@ -253,6 +253,7 @@ jobs:
             ${{ runner.temp }}/openbox.log
             ${{ runner.temp }}/glxinfo.log
             ${{ runner.temp }}/windows.txt
+            ${{ runner.temp }}/windows-geometry.txt
             ${{ runner.temp }}/display-diagnostics.txt
           if-no-files-found: warn
           retention-days: 14
