@@ -61,3 +61,10 @@ Valida el archivo desde A:
 ## Estado
 
 El binario A ya está preservado en GitHub y el bootstrap se ha configurado para descargarlo desde allí. La ejecución real de Blender en el runtime experimental A todavía debe verificarse; no se debe confundir la existencia del binario en GitHub con una ejecución ya realizada en A.
+
+
+## Instalación desde el artefacto de GitHub
+
+Si el runtime A no puede resolver el CDN de Blender, utiliza el puente de artefactos de Actions descrito en la guía principal: [docs/environment-a-install.md](../../docs/environment-a-install.md). El archivo permanente sigue siendo la Release asset; los artefactos divididos son un transporte temporal para superar el límite de materialización de 100 MiB por archivo.
+
+**Estado de esta sesión:** los cinco ZIP de partes se descargaron desde Actions y se materializaron en `/mnt/data/blender-transfer-parts/`. La unión, extracción y ejecución aún no se han podido comprobar porque el servicio de shell del runtime devolvió un error de infraestructura. No se debe afirmar que A ya ejecuta Blender hasta superar la prueba `A_RUNTIME_OK 4.5.3`.
