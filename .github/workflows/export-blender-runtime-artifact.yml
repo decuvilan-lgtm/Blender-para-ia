@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Download preserved GitHub Release asset
+      - name: Download and verify preserved GitHub Release asset
         shell: bash
         run: |
           set -euo pipefail
@@ -25,10 +25,54 @@ jobs:
             -o runtime-transfer/blender-4.5.3-linux-x64.tar.xz
           echo "975c58fcb244273838534bba771e64ad87739216b0f9b39a888531a49a72d845  runtime-transfer/blender-4.5.3-linux-x64.tar.xz" | sha256sum --check
           test "$(stat -c%s runtime-transfer/blender-4.5.3-linux-x64.tar.xz)" -eq 377397328
-      - name: Upload transfer artifact
+          split -b 80M -d -a 2 runtime-transfer/blender-4.5.3-linux-x64.tar.xz runtime-transfer/part-
+          sha256sum runtime-transfer/part-* > runtime-transfer/parts.sha256
+          test "$(find runtime-transfer -maxdepth 1 -name 'part-*' | wc -l)" -eq 5
+
+      - name: Upload chunk 00
         uses: actions/upload-artifact@v4
         with:
-          name: blender-4.5.3-runtime-transfer
-          path: runtime-transfer/blender-4.5.3-linux-x64.tar.xz
+          name: blender-runtime-part-00
+          path: runtime-transfer/part-00
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload chunk 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-runtime-part-01
+          path: runtime-transfer/part-01
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload chunk 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-runtime-part-02
+          path: runtime-transfer/part-02
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload chunk 03
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-runtime-part-03
+          path: runtime-transfer/part-03
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload chunk 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-runtime-part-04
+          path: runtime-transfer/part-04
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload chunk checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-runtime-parts-checksums
+          path: runtime-transfer/parts.sha256
           if-no-files-found: error
           retention-days: 30
