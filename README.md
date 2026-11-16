@@ -1,50 +1,53 @@
 # Blender para IA
 
-Laboratorio para experimentar, ejecutar y verificar Blender desde GitHub Actions sin importar el código fuente completo de Blender al repositorio.
+Laboratorio de creación, transferencia e inspección de proyectos Blender mediante dos entornos Blender independientes.
 
-## Objetivo inicial
+## Arquitectura obligatoria
 
-- Abrir Blender con interfaz gráfica dentro de un runner de GitHub Actions.
-- Mantener una sesión automatizada de hasta 10 minutos.
-- Controlar la instancia mediante un complemento Python (AI Bridge) y la API `bpy`, no mediante clics por coordenadas.
-- Enviar órdenes desde el cliente headless del repositorio por `localhost`.
-- Generar capturas, vídeos, logs y proyectos como artefactos de Actions.
-- Empaquetar el laboratorio experimental como artefacto descargable.
+El sistema contiene dos entornos distintos. No se deben fusionar ni conectar entre sí:
 
-## Estado
+1. **Entorno A — laboratorio experimental del agente (headless independiente).** Aquí se crean y modifican escenas, modelos, scripts y archivos `.blend`. No se conecta a GitHub Actions, al Bridge del repositorio ni a la instancia gráfica. Su salida es un archivo de proyecto y los recursos que lo acompañan.
+2. **Entorno B — instancia real del repositorio (Blender GUI en GitHub Actions).** Actions descarga y ejecuta Blender con interfaz gráfica. El headless del repositorio es el controlador de esta instancia: le envía operaciones permitidas mediante AI Bridge y API `bpy`, y solicita evidencias visuales. No es el laboratorio experimental A.
 
-**Fase 1 — infraestructura mínima en construcción.** Este repositorio no contiene todavía el código fuente de Blender. Blender se descarga durante el workflow; así evitamos subir gigabytes al repositorio y ralentizar cada cambio.
+**Flujo:** crear y probar en A → guardar el proyecto → transferirlo al repositorio → abrirlo en Blender GUI de Actions (B) → inspeccionar, ejecutar pruebas y capturar imágenes/vídeo → corregir en A y repetir.
 
-## Primera prueba
+La transferencia de archivos es explícita. A no abre sockets hacia B y B no controla A. El archivo `.blend` es la frontera entre ambos entornos.
+
+Consulta [docs/architecture.md](docs/architecture.md) para las responsabilidades, el ciclo de transferencia, las reglas de aislamiento y el estado de las conexiones.
+
+## Estado actual
+
+**Infraestructura en construcción.** La separación A/B está definida, pero el canal remoto interactivo y la transferencia automatizada todavía no están terminados. La primera ejecución de Actions consiguió arrancar Blender, iniciar el Bridge, ejecutar una operación y guardar un `.blend`; sin embargo, la captura de escritorio obtenida fue negra. Por tanto, esa ejecución **no valida todavía la interfaz gráfica ni la inspección visual**.
+
+No se considera superada una prueba visual si la imagen o el vídeo están vacíos, negros o no muestran la instancia Blender. El workflow debe fallar ante una captura PNG negra.
+
+## Blender GUI en GitHub Actions
 
 1. Abre la pestaña **Actions**.
 2. Selecciona **Blender GUI Session**.
 3. Pulsa **Run workflow**.
-4. Elige una operación (por defecto `create-demo`) y ejecuta.
-5. Descarga el artefacto `blender-session-evidence`.
+4. Selecciona una operación y ejecuta.
+5. Descarga `blender-session-evidence` y revisa las capturas, el vídeo, el proyecto y los logs.
 
-El workflow usa un runner Ubuntu hospedado por GitHub, un display virtual Xvfb y una instancia gráfica de Blender. La ventana se mide desde el arranque de Blender y tiene un máximo de 10 minutos. Esta primera versión recibe una operación al iniciar la ejecución; todavía no ofrece una consola de órdenes en vivo desde otra ejecución o desde el chat. Para otra operación se abre una nueva sesión.
+El runner hospedado es efímero. La sesión está limitada a un máximo configurable de 10 minutos; al finalizar, otra ejecución inicia una nueva instancia. Los proyectos deben guardarse y transferirse/restaurarse explícitamente.
 
-## Arquitectura
+## Componentes
 
-- `session_system/blender_bridge/`: complemento/servidor TCP que vive dentro de Blender y ejecuta operaciones permitidas en el hilo principal de Blender.
-- `session_system/repo_headless/`: cliente headless que envía órdenes al Bridge.
-- `session_system/scripts/`: capturas y utilidades.
-- `ai_lab/experimental/`: laboratorio reproducible que se empaqueta como artefacto.
-- `.github/workflows/`: automatización de sesiones.
+- `ai_lab/experimental/`: bootstrap y launcher del entorno A; descarga Blender al prepararse y lo ejecuta en background, sin conexión con Actions.
+- `session_system/blender_bridge/`: Bridge Python cargado dentro de Blender GUI en B. Las llamadas `bpy` se ejecutan en el hilo principal.
+- `session_system/repo_headless/`: controlador headless del repositorio para la instancia B.
+- `session_system/scripts/`: captura y validación de evidencias.
+- `.github/workflows/`: ciclo de vida de la instancia gráfica B.
 
-## Seguridad y límites de esta primera versión
+## Seguridad y límites
 
-- El Bridge escucha únicamente en `127.0.0.1`.
-- No acepta código Python arbitrario por la red; solo operaciones explícitamente implementadas.
-- El token se pasa mediante variable de entorno y nunca se guarda en el repositorio.
-- Los runners hospedados de GitHub son efímeros. Una sesión no queda viva entre ejecuciones: al reabrirla se inicia otro Blender. La escena se guarda automáticamente como artefacto para poder restaurarla en una fase posterior. El paquete experimental contiene scripts y bootstrap; descarga Blender al prepararse y no incluye el binario de más de 1 GB.
-- Un workflow_dispatch abre una sesión y ejecuta la orden seleccionada en esa misma ejecución. El cliente y Blender comparten runner y `localhost`; otra ejecución independiente no puede conectarse al localhost de un runner anterior.
+- El Bridge escucha en `127.0.0.1` dentro del runner; esto solo permite conexiones desde procesos del mismo runner. **No equivale a un canal remoto desde el agente/chat.**
+- No se acepta código Python arbitrario por TCP; solo operaciones explícitamente permitidas.
+- El token se pasa mediante variable de entorno y no se guarda en el repositorio.
+- El controlador B y Blender GUI B comparten runner en la implementación actual. El control remoto desde fuera del runner sigue pendiente; no se debe afirmar que ya existe.
+- El entorno A no utiliza ese Bridge ni el cliente B.
+- El paquete experimental contiene scripts y descarga el binario oficial al prepararse; no se sube el ejecutable de Blender (más de 1 GB) al repositorio.
 
-## Versiones
+## Versión y licencias
 
-La primera prueba fija Blender 4.5.3 para que los resultados sean reproducibles. La versión podrá actualizarse tras validar compatibilidad.
-
-## Licencias
-
-Esta fase no copia ni redistribuye el código fuente de Blender. Antes de incorporar o distribuir partes del proyecto original, se documentarán las licencias y obligaciones aplicables a cada componente.
+La infraestructura fija Blender 4.5.3 para reproducibilidad. Esta fase no copia el código fuente completo de Blender al repositorio. Antes de redistribuir binarios o partes del proyecto se revisarán las licencias y obligaciones aplicables.
