@@ -17,7 +17,7 @@ Consulta [docs/architecture.md](docs/architecture.md) para las responsabilidades
 
 ## Estado actual
 
-**Infraestructura en construcción.** La separación A/B está definida, pero el canal remoto interactivo y la transferencia automatizada todavía no están terminados. La primera captura fue negra por una configuración incorrecta de geometría de ventana. Tras corregirla, el smoke test `43798100974` terminó correctamente y se inspeccionaron el PNG y el primer fotograma del MP4: muestran Blender 4.5.3 ocupando el escritorio 1600×900. Esto valida la GUI de B y el flujo de evidencias; la ejecución real del laboratorio A y la transferencia de un proyecto creado allí siguen pendientes.
+**Infraestructura en construcción.** La separación A/B está definida, pero el canal remoto interactivo y la transferencia automatizada todavía no están terminados. La primera captura fue negra por una configuración incorrecta de geometría de ventana. Tras corregirla, el smoke test `43798100974` terminó correctamente y se inspeccionaron el PNG y el primer fotograma del MP4: muestran Blender 4.5.3 ocupando el escritorio 1600×900. El test adicional `43798586367` también ejecutó `create-demo` mediante el controlador B y la captura muestra los objetos generados. Esto valida GUI, Bridge local, operación `bpy` y evidencias; la ejecución real del laboratorio A y la transferencia de un proyecto creado allí siguen pendientes.
 
 No se considera superada una prueba visual si la imagen o el vídeo están vacíos, negros o no muestran la instancia Blender. El workflow debe fallar ante una captura PNG negra.
 
