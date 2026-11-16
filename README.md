@@ -54,3 +54,12 @@ Si transferiste un `.blend` al repositorio, completa `project_path` con su ruta 
 - El entorno A no utiliza el Bridge ni el cliente B.
 - El binario de Blender se conserva como Release asset, no dentro del historial Git.
 - Blender se distribuye bajo sus licencias aplicables; el proyecto conserva la procedencia oficial y el checksum del binario.
+
+
+### Instalar Blender en el entorno A del asistente
+
+La descarga directa del CDN oficial puede no estar disponible desde el runtime experimental. El procedimiento alternativo ya está preparado y el puente de transferencia fue probado: Actions descarga la Release permanente, verifica el SHA-256 y divide el archivo en cinco artefactos pequeños; el conector de GitHub los descarga y se materializan en el espacio de trabajo de A.
+
+**Guía visible y pasos exactos:** [docs/environment-a-install.md](docs/environment-a-install.md).
+
+Estado: los cinco fragmentos ya se transfirieron al almacenamiento de trabajo de A. La unión, extracción y ejecución de Blender aún están pendientes de una sesión de shell funcional; no se declara instalado hasta que `blender --version` y la prueba `A_RUNTIME_OK 4.5.3` pasen dentro de A.
