@@ -18,7 +18,7 @@ ARCHIVE="$WORK_DIR/$ARCHIVE_NAME"
 INSTALL_ROOT="${BLENDER_CACHE_DIR:-$HOME/.cache/blender-for-ai}"
 BLENDER_BIN="$INSTALL_ROOT/blender-${VERSION}-linux-x64/blender"
 
-for command in unzip sha256sum cat tar; do
+for command in unzip sha256sum cat tar stat; do
   command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
 
