@@ -1,0 +1,34 @@
+name: Export Blender runtime for Environment A transfer
+
+on:
+  push:
+    paths:
+      - ".github/workflows/export-blender-runtime-artifact.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  export-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download preserved GitHub Release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-transfer
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 \
+            "https://github.com/decuvilan-lgtm/Blender-para-ia/releases/download/blender-4.5.3-linux-x64/blender-4.5.3-linux-x64.tar.xz" \
+            -o runtime-transfer/blender-4.5.3-linux-x64.tar.xz
+          echo "975c58fcb244273838534bba771e64ad87739216b0f9b39a888531a49a72d845  runtime-transfer/blender-4.5.3-linux-x64.tar.xz" | sha256sum --check
+          test "$(stat -c%s runtime-transfer/blender-4.5.3-linux-x64.tar.xz)" -eq 377397328
+      - name: Upload transfer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-4.5.3-runtime-transfer
+          path: runtime-transfer/blender-4.5.3-linux-x64.tar.xz
+          if-no-files-found: error
+          retention-days: 30
