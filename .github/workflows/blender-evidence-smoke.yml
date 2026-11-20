@@ -55,9 +55,9 @@ jobs:
           curl --fail-with-body -sS -X POST http://127.0.0.1:8766/api/command \
             -H "Authorization: Bearer $BLENDER_REMOTE_API_TOKEN" -H "Content-Type: application/json" \
             -d '{"command":"add-primitive","primitive":"uv_sphere","name":"Smoke_Sphere","location":[2,0,1]}' > "$BLENDER_ARTIFACT_DIR/add-primitive.json"
-          "$PYTHON_BIN" - <<'PY'
-          import base64, json, pathlib
-          root=pathlib.Path("$RUNNER_TEMP/evidence")
+          EVIDENCE_DIR="$RUNNER_TEMP/evidence" "$PYTHON_BIN" - <<'PY'
+          import base64, json, pathlib, os
+          root=pathlib.Path(os.environ["EVIDENCE_DIR"])
           for name in ("ping","create-demo","add-primitive"):
               data=json.loads((root/(name+".json")).read_text())
               assert data.get("success") is True, (name,data.get("error"))
