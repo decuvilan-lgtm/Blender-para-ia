@@ -1,0 +1,84 @@
+name: Blender Evidence Bridge Smoke Test
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/blender-evidence-smoke.yml"
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GUI and capture dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb openbox x11-utils ffmpeg libgl1-mesa-dri libgl1 libegl1 libxi6 libxrender1 libxkbcommon0 libxkbcommon-x11-0 libsm6 libxfixes3
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --upgrade pip pillow mss
+          curl --fail --location --retry 3 "https://download.blender.org/release/Blender4.5/blender-4.5.3-linux-x64.tar.xz" -o "$RUNNER_TEMP/blender.tar.xz"
+          mkdir -p "$RUNNER_TEMP/blender"
+          tar -xf "$RUNNER_TEMP/blender.tar.xz" -C "$RUNNER_TEMP/blender"
+          echo "PYTHON_BIN=$RUNNER_TEMP/venv/bin/python" >> "$GITHUB_ENV"
+          echo "BLENDER_BIN=$RUNNER_TEMP/blender/blender-4.5.3-linux-x64/blender" >> "$GITHUB_ENV"
+      - name: Start GUI Blender, bridge and evidence gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export BLENDER_BRIDGE_TOKEN="$(openssl rand -hex 32)"
+          export BLENDER_REMOTE_API_TOKEN="$(openssl rand -hex 32)"
+          export BLENDER_BRIDGE_PORT=8765
+          export BLENDER_ARTIFACT_DIR="$RUNNER_TEMP/evidence"
+          mkdir -p "$BLENDER_ARTIFACT_DIR"
+          Xvfb :99 -screen 0 1600x900x24 +extension GLX +render -noreset > "$RUNNER_TEMP/xvfb.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/xvfb.pid"
+          for i in $(seq 1 30); do xdpyinfo -display :99 >/dev/null 2>&1 && break; sleep 1; done
+          openbox > "$RUNNER_TEMP/openbox.log" 2>&1 & echo $! > "$RUNNER_TEMP/openbox.pid"
+          sleep 2
+          "$BLENDER_BIN" --factory-startup --window-geometry 0 0 1600 900 --window-maximized --python session_system/blender_bridge/bridge.py > "$RUNNER_TEMP/blender.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/blender.pid"
+          for i in $(seq 1 60); do "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 3 >/dev/null 2>&1 && break; sleep 2; done
+          "$PYTHON_BIN" -m py_compile session_system/remote/control_server.py session_system/repo_headless/client.py session_system/blender_bridge/bridge.py
+          export GITHUB_WORKSPACE="$GITHUB_WORKSPACE"
+          export BLENDER_CLIENT="$PYTHON_BIN"
+          nohup "$PYTHON_BIN" session_system/remote/control_server.py > "$RUNNER_TEMP/control-api.log" 2>&1 < /dev/null &
+          echo $! > "$RUNNER_TEMP/control-api.pid"
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8766/api/health >/dev/null && break; sleep 1; done
+          for command in ping create-demo; do
+            curl --fail-with-body -sS -X POST http://127.0.0.1:8766/api/command \
+              -H "Authorization: Bearer $BLENDER_REMOTE_API_TOKEN" -H "Content-Type: application/json" \
+              -d "{\"command\":\"$command\"}" > "$BLENDER_ARTIFACT_DIR/$command.json"
+          done
+          curl --fail-with-body -sS -X POST http://127.0.0.1:8766/api/command \
+            -H "Authorization: Bearer $BLENDER_REMOTE_API_TOKEN" -H "Content-Type: application/json" \
+            -d '{"command":"add-primitive","primitive":"uv_sphere","name":"Smoke_Sphere","location":[2,0,1]}' > "$BLENDER_ARTIFACT_DIR/add-primitive.json"
+          "$PYTHON_BIN" - <<'PY'
+          import base64, json, pathlib
+          root=pathlib.Path("$RUNNER_TEMP/evidence")
+          for name in ("ping","create-demo","add-primitive"):
+              data=json.loads((root/(name+".json")).read_text())
+              assert data.get("success") is True, (name,data.get("error"))
+              ev=data["evidence"]
+              jpg=base64.b64decode(ev["screenshot"]["data"])
+              mp4=base64.b64decode(ev["video"]["data"])
+              assert jpg[:2]==b"\xff\xd8" and len(jpg)>10000, (name,"bad JPEG")
+              assert b"ftyp" in mp4[:32] and len(mp4)>1000, (name,"bad MP4")
+              (root/(name+"-evidence.jpg")).write_bytes(jpg)
+              (root/(name+"-evidence.mp4")).write_bytes(mp4)
+              print(name,"success; JPEG",len(jpg),"bytes; MP4",len(mp4),"bytes")
+          PY
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-evidence-bridge-smoke
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Stop processes
+        if: always()
+        run: |
+          for f in "$RUNNER_TEMP"/*.pid; do [[ -f "$f" ]] && kill "$(cat "$f")" 2>/dev/null || true; done
