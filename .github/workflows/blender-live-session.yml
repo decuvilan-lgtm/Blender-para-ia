@@ -72,12 +72,14 @@ jobs:
           export BLENDER_BRIDGE_PORT=8765 BLENDER_ARTIFACT_DIR="$RUNNER_TEMP/blender-artifacts"
           "$BLENDER_BIN" "\${args[@]}" > "$RUNNER_TEMP/blender.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/blender.pid"
-          for i in $(seq 1 90); do
-            if grep -q "ANIME_GIRL_SCENE_COMPLETE" "$RUNNER_TEMP/blender.log"; then break; fi
+          for i in $(seq 1 180); do
+            if [[ -s "$RUNNER_TEMP/blender-artifacts/anime_girl.blend" && -s "$RUNNER_TEMP/blender-artifacts/anime_girl_preview.png" && -s "$RUNNER_TEMP/blender-artifacts/anime_girl_animation.mp4" ]]; then break; fi
             if ! kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; then cat "$RUNNER_TEMP/blender.log"; exit 1; fi
             sleep 2
           done
-          grep -q "ANIME_GIRL_SCENE_COMPLETE" "$RUNNER_TEMP/blender.log" || { echo "Anime scene render did not finish in time"; tail -n 100 "$RUNNER_TEMP/blender.log"; exit 1; }
+          test -s "$RUNNER_TEMP/blender-artifacts/anime_girl.blend"
+          test -s "$RUNNER_TEMP/blender-artifacts/anime_girl_preview.png"
+          test -s "$RUNNER_TEMP/blender-artifacts/anime_girl_animation.mp4"
           "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 15
           "$PYTHON_BIN" session_system/repo_headless/client.py scene-info --timeout 30 > "$RUNNER_TEMP/blender-artifacts/scene-info.json"
 
