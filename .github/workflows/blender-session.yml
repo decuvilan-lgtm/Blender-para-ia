@@ -185,6 +185,21 @@ jobs:
             exit 1
           fi
 
+      - name: Start full-session video recording
+        if: success()
+        env:
+          DISPLAY: ":99"
+          BLENDER_ARTIFACT_DIR: ${{ runner.temp }}/blender-artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ffmpeg -y -loglevel warning -f x11grab -draw_mouse 1 -video_size 1600x900 -framerate 6 -i :99.0 \
+            -an -c:v libx264 -preset ultrafast -crf 30 -pix_fmt yuv420p \
+            -movflags +faststart "$BLENDER_ARTIFACT_DIR/full-session.mp4" \
+            > "$RUNNER_TEMP/recording.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/recording.pid"
+          sleep 2
+          kill -0 "$(cat "$RUNNER_TEMP/recording.pid")"
       - name: Execute requested operation through repository headless client
         env:
           BLENDER_COMMAND: ${{ inputs.command || 'visual-test' }}
@@ -233,6 +248,22 @@ jobs:
             sleep "$sleep_for"
           done
 
+      - name: Stop full-session video recording
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/recording.pid" ]]; then
+            recorder="$(cat "$RUNNER_TEMP/recording.pid")"
+            kill -INT "$recorder" 2>/dev/null || true
+            for attempt in $(seq 1 15); do
+              kill -0 "$recorder" 2>/dev/null || break
+              sleep 1
+            done
+            kill -KILL "$recorder" 2>/dev/null || true
+          fi
+          if [[ -f "$RUNNER_TEMP/blender-artifacts/full-session.mp4" ]]; then
+            ffmpeg -y -loglevel error -i "$RUNNER_TEMP/blender-artifacts/full-session.mp4" -frames:v 1 "$RUNNER_TEMP/blender-artifacts/full-session-poster.png"
+          fi
       - name: Stop Blender and virtual display
         if: always()
         run: |
@@ -261,6 +292,7 @@ jobs:
             ${{ runner.temp }}/windows.txt
             ${{ runner.temp }}/windows-geometry.txt
             ${{ runner.temp }}/display-diagnostics.txt
+            ${{ runner.temp }}/recording.log
           if-no-files-found: warn
           retention-days: 14
 
