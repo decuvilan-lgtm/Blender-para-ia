@@ -44,12 +44,11 @@ jobs:
           chmod +x "$RUNNER_TEMP/cloudflared"
 
       - name: Start Blender GUI and authenticated remote desktop
-        env:
-          BLENDER_BRIDGE_TOKEN: ${{ secrets.BLENDER_BRIDGE_TOKEN || github.run_id }}
-          BLENDER_REMOTE_API_TOKEN: ${{ secrets.BLENDER_REMOTE_API_TOKEN || github.run_id }}
         shell: bash
         run: |
           set -euo pipefail
+          export BLENDER_BRIDGE_TOKEN="$(openssl rand -hex 32)"
+          export BLENDER_REMOTE_API_TOKEN="$(openssl rand -hex 32)"
           export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
           mkdir -p "$RUNNER_TEMP/blender-artifacts"
           Xvfb :99 -screen 0 1600x900x24 +extension GLX +render -noreset > "$RUNNER_TEMP/xvfb.log" 2>&1 &
@@ -63,15 +62,13 @@ jobs:
           export BLENDER_BRIDGE_PORT=8765 BLENDER_ARTIFACT_DIR="$RUNNER_TEMP/blender-artifacts"
           "$BLENDER_BIN" "${args[@]}" > "$RUNNER_TEMP/blender.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/blender.pid"
-          echo "BLENDER_BRIDGE_TOKEN=$BLENDER_BRIDGE_TOKEN" >> "$GITHUB_ENV"
-          echo "BLENDER_REMOTE_API_TOKEN=$BLENDER_REMOTE_API_TOKEN" >> "$GITHUB_ENV"
           for i in $(seq 1 60); do "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 3 && break; sleep 2; done
           "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 5
 
           # Protect the VNC protocol with a random, per-run password.
           VNC_PASSWORD="$(openssl rand -hex 8)"
           echo "$VNC_PASSWORD" > "$RUNNER_TEMP/vnc-password"
-          x11vnc -display :99 -forever -shared -rfbport 5900 -passwd "$VNC_PASSWORD" -localhost -nopw -noxdamage > "$RUNNER_TEMP/x11vnc.log" 2>&1 &
+          x11vnc -display :99 -forever -shared -rfbport 5900 -passwd "$VNC_PASSWORD" -localhost -noxdamage > "$RUNNER_TEMP/x11vnc.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/x11vnc.pid"
           websockify --web=/usr/share/novnc/ 6080 localhost:5900 > "$RUNNER_TEMP/websockify.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/websockify.pid"
@@ -85,6 +82,11 @@ jobs:
               proxy_pass http://127.0.0.1:8766/api/;
               proxy_set_header Host $host;
             }
+            location = /vnc.html { proxy_pass http://127.0.0.1:6080/vnc.html; }
+            location /app/ { proxy_pass http://127.0.0.1:6080/app/; }
+            location /core/ { proxy_pass http://127.0.0.1:6080/core/; }
+            location /vendor/ { proxy_pass http://127.0.0.1:6080/vendor/; }
+            location /include/ { proxy_pass http://127.0.0.1:6080/include/; }
             location /websockify {
               proxy_pass http://127.0.0.1:6080/websockify;
               proxy_http_version 1.1;
@@ -92,7 +94,7 @@ jobs:
               proxy_set_header Connection "Upgrade";
             }
             location / {
-              proxy_pass http://127.0.0.1:6080/;
+              proxy_pass http://127.0.0.1:8766/;
               proxy_set_header Host $host;
             }
           }
