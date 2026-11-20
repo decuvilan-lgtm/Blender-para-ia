@@ -28,7 +28,7 @@ def send(command: str, host: str, port: int, token: str, timeout: float):
 
 def main():
     parser = argparse.ArgumentParser(description="Send an allowlisted command to an active Blender session.")
-    parser.add_argument("command", choices=["ping", "scene-info", "create-demo", "save", "render"])
+    parser.add_argument("command", choices=["ping", "scene-info", "create-demo", "save", "render", "visual-test"])
     parser.add_argument("--host", default=os.environ.get("BLENDER_BRIDGE_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("BLENDER_BRIDGE_PORT", "8765")))
     parser.add_argument("--timeout", type=float, default=180.0)
