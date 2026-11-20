@@ -87,13 +87,13 @@ jobs:
           "$BLENDER_BIN" "\${args[@]}" > "$RUNNER_TEMP/blender.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/blender.pid"
           for i in $(seq 1 180); do
-            if [[ -s "$RUNNER_TEMP/blender-artifacts/anime_girl.blend" && -s "$RUNNER_TEMP/blender-artifacts/anime_girl_preview.png" && -s "$RUNNER_TEMP/blender-artifacts/anime_frame_0048.png" ]]; then break; fi
+            if [[ -s "$RUNNER_TEMP/blender-artifacts/anime_girl.blend" && -s "$RUNNER_TEMP/blender-artifacts/anime_girl_preview.png" && -s "$RUNNER_TEMP/blender-artifacts/anime_frame_0072.png" ]]; then break; fi
             if ! kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; then cat "$RUNNER_TEMP/blender.log"; exit 1; fi
             sleep 2
           done
           test -s "$RUNNER_TEMP/blender-artifacts/anime_girl.blend"
           test -s "$RUNNER_TEMP/blender-artifacts/anime_girl_preview.png"
-          test -s "$RUNNER_TEMP/blender-artifacts/anime_frame_0048.png"
+          test -s "$RUNNER_TEMP/blender-artifacts/anime_frame_0072.png"
           ffmpeg -y -loglevel error -framerate 24 -start_number 1 -i "$RUNNER_TEMP/blender-artifacts/anime_frame_%04d.png" -c:v libx264 -pix_fmt yuv420p -crf 19 -movflags +faststart "$RUNNER_TEMP/blender-artifacts/anime_girl_animation.mp4"
           "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 15
           "$PYTHON_BIN" session_system/repo_headless/client.py scene-info --timeout 30 > "$RUNNER_TEMP/blender-artifacts/scene-info.json"
