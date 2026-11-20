@@ -144,8 +144,10 @@ area("Fill softbox",(-4,-3,3.5),420,(0.55,0.72,1.0),3.5)
 area("Hair rim",(0,3,5),800,(0.72,0.55,1.0),3.0)
 
 scene=bpy.context.scene
-scene.render.engine='BLENDER_EEVEE_NEXT'
-scene.eevee.taa_render_samples=32
+available_engines = {item.identifier for item in bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items}
+scene.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in available_engines else 'BLENDER_EEVEE'
+if hasattr(scene, 'eevee'):
+    scene.eevee.taa_render_samples = 32
 scene.render.resolution_x=720
 scene.render.resolution_y=720
 scene.render.resolution_percentage=100
