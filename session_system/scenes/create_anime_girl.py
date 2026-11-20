@@ -147,9 +147,9 @@ scene=bpy.context.scene
 available_engines = {item.identifier for item in bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items}
 scene.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in available_engines else 'BLENDER_EEVEE'
 if hasattr(scene, 'eevee'):
-    scene.eevee.taa_render_samples = 32
-scene.render.resolution_x=720
-scene.render.resolution_y=720
+    scene.eevee.taa_render_samples = 8
+scene.render.resolution_x=480
+scene.render.resolution_y=480
 scene.render.resolution_percentage=100
 scene.render.image_settings.file_format='PNG'
 scene.render.film_transparent=False
@@ -163,15 +163,15 @@ wave=bpy.data.objects.get("Forearm R")
 hand=bpy.data.objects.get("Hand R")
 head_obj=bpy.data.objects.get("Head")
 scene.frame_start=1
-scene.frame_end=120
+scene.frame_end=48
 scene.render.fps=24
-for frame, angle in ((1,0.0),(24,0.0),(42,-0.7),(60,0.45),(78,-0.65),(96,0.25),(120,0.0)):
+for frame, angle in ((1,0.0),(10,0.0),(18,-0.7),(24,0.45),(30,-0.65),(38,0.25),(48,0.0)):
     scene.frame_set(frame)
     wave.rotation_euler[1]=angle
     wave.keyframe_insert(data_path="rotation_euler",frame=frame)
     hand.rotation_euler[1]=angle*0.6
     hand.keyframe_insert(data_path="rotation_euler",frame=frame)
-for frame, angle in ((1,0.0),(60,0.045),(120,0.0)):
+for frame, angle in ((1,0.0),(24,0.045),(48,0.0)):
     scene.frame_set(frame)
     head_obj.rotation_euler[2]=angle
     head_obj.keyframe_insert(data_path="rotation_euler",frame=frame)
