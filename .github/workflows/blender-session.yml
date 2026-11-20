@@ -282,10 +282,10 @@ jobs:
         if: always()
         run: |
           cp session_system/viewer/index.html "$RUNNER_TEMP/blender-artifacts/index.html"
-          cat > "$RUNNER_TEMP/blender-artifacts/README.txt" <<\x27EOF\x27
+          cat > "$RUNNER_TEMP/blender-artifacts/README.txt" <<'EOF'
           Open index.html in a browser to watch the complete Blender desktop recording.
           full-session.mp4 is captured from the actual X11 desktop during the session.
-          preview.png is Blender\x27s rendered output; desktop.png is the GUI screenshot.
+          preview.png is Blender's rendered output; desktop.png is the GUI screenshot.
           EOF
       - name: Upload session evidence
         if: always()
