@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - ".github/workflows/blender-live-session.yml"
+      - "session_system/scenes/**"
   workflow_dispatch:
     inputs:
       project_path:
@@ -25,7 +26,7 @@ jobs:
 
       - name: Validate project and install remote desktop
         env:
-          REQUESTED_PROJECT: ${{ inputs.project_path }}
+          REQUESTED_PROJECT: \${{ inputs.project_path }}
         run: |
           set -euo pipefail
           project="$REQUESTED_PROJECT"
@@ -44,7 +45,6 @@ jobs:
           tar -xf "$RUNNER_TEMP/blender.tar.xz" -C "$RUNNER_TEMP/blender"
           echo "BLENDER_BIN=$RUNNER_TEMP/blender/blender-4.5.3-linux-x64/blender" >> "$GITHUB_ENV"
 
-          # Install cloudflared from Cloudflare's signed APT repository.
           curl --fail --location --retry 3 https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
           echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
           sudo apt-get update
@@ -66,13 +66,20 @@ jobs:
           openbox > "$RUNNER_TEMP/openbox.log" 2>&1 & echo $! > "$RUNNER_TEMP/openbox.pid"
           sleep 2
           args=(--window-geometry 0 0 1600 900 --window-maximized)
-          if [[ -n "$PROJECT_PATH" ]]; then args=("$PROJECT_PATH" "${args[@]}"); else args=(--factory-startup "${args[@]}"); fi
+          if [[ -n "$PROJECT_PATH" ]]; then args=("$PROJECT_PATH" "\${args[@]}"); else args=(--factory-startup "\${args[@]}"); fi
           args+=(--python session_system/blender_bridge/bridge.py)
+          args+=(--python session_system/scenes/create_anime_girl.py)
           export BLENDER_BRIDGE_PORT=8765 BLENDER_ARTIFACT_DIR="$RUNNER_TEMP/blender-artifacts"
-          "$BLENDER_BIN" "${args[@]}" > "$RUNNER_TEMP/blender.log" 2>&1 &
+          "$BLENDER_BIN" "\${args[@]}" > "$RUNNER_TEMP/blender.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/blender.pid"
-          for i in $(seq 1 60); do "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 3 && break; sleep 2; done
-          "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 5
+          for i in $(seq 1 90); do
+            if grep -q "ANIME_GIRL_SCENE_COMPLETE" "$RUNNER_TEMP/blender.log"; then break; fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; then cat "$RUNNER_TEMP/blender.log"; exit 1; fi
+            sleep 2
+          done
+          grep -q "ANIME_GIRL_SCENE_COMPLETE" "$RUNNER_TEMP/blender.log" || { echo "Anime scene render did not finish in time"; tail -n 100 "$RUNNER_TEMP/blender.log"; exit 1; }
+          "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 15
+          "$PYTHON_BIN" session_system/repo_headless/client.py scene-info --timeout 30 > "$RUNNER_TEMP/blender-artifacts/scene-info.json"
 
           VNC_PASSWORD="$(openssl rand -hex 8)"
           echo "$VNC_PASSWORD" > "$RUNNER_TEMP/vnc-password"
@@ -121,50 +128,31 @@ jobs:
             [[ -n "$URL" ]] && break
             sleep 2
           done
-          if [[ -z "${URL:-}" ]]; then cat "$RUNNER_TEMP/cloudflared.log"; exit 1; fi
+          if [[ -z "\${URL:-}" ]]; then cat "$RUNNER_TEMP/cloudflared.log"; exit 1; fi
           echo "::notice title=Blender Live URL::$URL/#$BLENDER_REMOTE_API_TOKEN"
           echo "::notice title=VNC password::$VNC_PASSWORD"
           echo "Remote session ready: $URL"
-          echo "VNC password: $VNC_PASSWORD"
-          echo "Live control link: $URL/#$BLENDER_REMOTE_API_TOKEN"
 
-      - name: Start full-session recording
+      - name: Record final GUI evidence
         run: |
           set -euo pipefail
-          nohup ffmpeg -y -loglevel warning -f x11grab -draw_mouse 1 -video_size 1600x900 -framerate 6 -i :99.0 -an -c:v libx264 -preset ultrafast -crf 30 -pix_fmt yuv420p -movflags +faststart "$RUNNER_TEMP/blender-artifacts/full-session.mp4" > "$RUNNER_TEMP/recording.log" 2>&1 < /dev/null &
-          echo $! > "$RUNNER_TEMP/recording.pid"
-          disown || true
+          "$PYTHON_BIN" session_system/scripts/capture_screen.py "$RUNNER_TEMP/blender-artifacts/desktop.png"
+          cp "$RUNNER_TEMP"/blender.log "$RUNNER_TEMP"/xvfb.log "$RUNNER_TEMP"/openbox.log "$RUNNER_TEMP"/cloudflared.log "$RUNNER_TEMP/blender-artifacts/" 2>/dev/null || true
+          test -s "$RUNNER_TEMP/blender-artifacts/anime_girl.blend"
+          test -s "$RUNNER_TEMP/blender-artifacts/anime_girl_preview.png"
+          test -s "$RUNNER_TEMP/blender-artifacts/anime_girl_animation.mp4"
 
-      - name: Keep the live Blender session available
+      - name: Keep live inspection available briefly
         shell: bash
         run: |
-          echo "Session is live. Use the URL and VNC password in the previous step logs."
-          echo "This temporary GitHub-hosted runner has a six-hour maximum."
-          while kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; do sleep 15; done
-          echo "Blender exited; ending session."
-          exit 1
+          echo "Anime girl is built in the Blender GUI. Live inspection window: 3 minutes."
+          sleep 180
 
-      - name: Capture final evidence and stop services
-        if: always()
-        run: |
-          mkdir -p "$RUNNER_TEMP/blender-artifacts"
-          if [[ -f "$RUNNER_TEMP/recording.pid" ]]; then kill -INT "$(cat "$RUNNER_TEMP/recording.pid")" 2>/dev/null || true; sleep 3; fi
-          if [[ -f "$RUNNER_TEMP/blender.pid" ]] && kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; then
-            "$PYTHON_BIN" session_system/repo_headless/client.py save --timeout 30 || true
-            "$PYTHON_BIN" session_system/scripts/capture_screen.py "$RUNNER_TEMP/blender-artifacts/desktop.png" || true
-          fi
-          cp "$RUNNER_TEMP"/blender.log "$RUNNER_TEMP"/xvfb.log "$RUNNER_TEMP"/openbox.log "$RUNNER_TEMP"/recording.log "$RUNNER_TEMP"/cloudflared.log "$RUNNER_TEMP/blender-artifacts/" 2>/dev/null || true
-          cp session_system/viewer/index.html "$RUNNER_TEMP/blender-artifacts/index.html"
-          for f in "$RUNNER_TEMP"/*.pid; do [[ -f "$f" ]] && kill "$(cat "$f")" 2>/dev/null || true; done
-          [[ -f "$RUNNER_TEMP/blender.pid" ]] && kill "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || true
-          [[ -f "$RUNNER_TEMP/openbox.pid" ]] && kill "$(cat "$RUNNER_TEMP/openbox.pid")" 2>/dev/null || true
-          [[ -f "$RUNNER_TEMP/xvfb.pid" ]] && kill "$(cat "$RUNNER_TEMP/xvfb.pid")" 2>/dev/null || true
-
-      - name: Upload session artifacts
+      - name: Upload Blender project and video evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blender-live-session-evidence
-          path: ${{ runner.temp }}/blender-artifacts/
-          if-no-files-found: warn
+          name: anime-girl-blender-evidence
+          path: \${{ runner.temp }}/blender-artifacts/
+          if-no-files-found: error
           retention-days: 14
