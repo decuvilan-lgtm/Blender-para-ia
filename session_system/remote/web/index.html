@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blender Live Session</title><style>
+:root{color-scheme:dark;font:16px system-ui;background:#101318;color:#edf2f7}*{box-sizing:border-box}
+body{margin:0;padding:16px;max-width:1200px;margin:auto}h1{font-size:1.35rem;margin:0 0 6px}
+p{color:#aeb9c8}.panel{background:#1b222c;border:1px solid #303b49;border-radius:12px;padding:12px;margin:12px 0}
+iframe{width:100%;height:min(68vh,760px);border:1px solid #394454;border-radius:10px;background:#080a0e}
+button{background:#2867c7;color:white;border:0;border-radius:8px;padding:11px 14px;margin:4px;font-weight:600}
+button:disabled{opacity:.5}pre{white-space:pre-wrap;overflow-wrap:anywhere;color:#b9d5ff}
+small{color:#aeb9c8}.row{display:flex;flex-wrap:wrap;gap:5px}
+</style></head><body>
+<h1>Blender · sesión remota</h1><p>Estás conectado a la instancia GUI real que se está grabando en Actions.</p>
+<div class="panel"><b>Escritorio Blender</b><p><small>Contraseña VNC: se muestra en los registros de inicio de esta ejecución. El control remoto usa cifrado HTTPS/WSS.</small></p>
+<iframe id="desk" title="Escritorio remoto Blender"></iframe></div>
+<div class="panel"><b>Órdenes directas a Blender</b><p>Estas órdenes se ejecutan en la misma instancia, sin lanzar otro Blender.</p>
+<div class="row"><button data-cmd="ping">Conectar</button><button data-cmd="scene-info">Estado de escena</button><button data-cmd="create-demo">Crear demo</button><button data-cmd="render">Renderizar</button><button data-cmd="save">Guardar .blend</button></div><pre id="out">Esperando una orden…</pre></div>
+<script>
+const token=location.hash.slice(1);const out=document.querySelector('#out');
+const host=location.hostname;const port=location.port||'443';
+document.querySelector('#desk').src='/vnc.html?host='+encodeURIComponent(host)+'&port='+port+'&encrypt=1&path=websockify&autoconnect=1&resize=scale';
+document.querySelectorAll('button[data-cmd]').forEach(b=>b.onclick=async()=>{
+ if(!token){out.textContent='Falta el token de sesión en el enlace. Usa el enlace completo publicado por Actions.';return}
+ document.querySelectorAll('button').forEach(x=>x.disabled=true);out.textContent='Ejecutando '+b.dataset.cmd+'…';
+ try{const r=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({command:b.dataset.cmd})});
+ const data=await r.json();out.textContent=JSON.stringify(data,null,2)}
+ catch(e){out.textContent='Error: '+e}finally{document.querySelectorAll('button').forEach(x=>x.disabled=false)}
+});
+</script></body></html>
