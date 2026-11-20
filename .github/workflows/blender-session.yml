@@ -12,7 +12,7 @@ on:
         description: "Operation to execute in the active Blender GUI session"
         required: true
         type: choice
-        default: scene-info
+        default: visual-test
         options:
           - ping
           - scene-info
