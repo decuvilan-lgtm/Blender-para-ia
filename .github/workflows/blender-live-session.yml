@@ -45,17 +45,10 @@ jobs:
             git push
           fi
 
-      - name: Validate project and install remote desktop
-        env:
-          REQUESTED_PROJECT: \${{ inputs.project_path }}
+      - name: Install remote desktop and prepare Blender workspace
         run: |
           set -euo pipefail
-          project="$REQUESTED_PROJECT"
-          if [[ -n "$project" ]]; then
-            case "$project" in /*|*..*|*\\*) echo "Unsafe project path" >&2; exit 1;; esac
-            [[ "$project" == *.blend && -f "$project" ]] || { echo "Project .blend not found"; exit 1; }
-          fi
-          echo "PROJECT_PATH=$project" >> "$GITHUB_ENV"
+          echo "PROJECT_PATH=" >> "$GITHUB_ENV"
           sudo apt-get update
           sudo apt-get install -y xvfb openbox wmctrl xdotool x11-utils x11-xserver-utils mesa-utils libgl1-mesa-dri libgl1 libegl1 libxi6 libxrender1 libxkbcommon0 libxkbcommon-x11-0 libsm6 libxfixes3 ffmpeg x11vnc novnc websockify nginx ca-certificates curl gnupg
           python -m venv "$RUNNER_TEMP/venv"
