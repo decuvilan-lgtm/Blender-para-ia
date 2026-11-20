@@ -147,7 +147,6 @@ jobs:
             "$PYTHON_BIN" session_system/scripts/capture_screen.py "$RUNNER_TEMP/blender-artifacts/desktop.png" || true
           fi
           cp "$RUNNER_TEMP"/blender.log "$RUNNER_TEMP"/xvfb.log "$RUNNER_TEMP"/openbox.log "$RUNNER_TEMP"/recording.log "$RUNNER_TEMP"/cloudflared.log "$RUNNER_TEMP/blender-artifacts/" 2>/dev/null || true
-          cp "$RUNNER_TEMP/vnc-password" "$RUNNER_TEMP/blender-artifacts/" 2>/dev/null || true
           cp session_system/viewer/index.html "$RUNNER_TEMP/blender-artifacts/index.html"
           for f in "$RUNNER_TEMP"/*.pid; do [[ -f "$f" ]] && kill "$(cat "$f")" 2>/dev/null || true; done
           [[ -f "$RUNNER_TEMP/blender.pid" ]] && kill "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || true
