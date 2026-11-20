@@ -99,7 +99,31 @@ def _execute(request):
         path = ARTIFACT_DIR / "preview.png"
         bpy.context.scene.render.filepath = str(path)
         bpy.ops.render.render(write_still=True)
-        return {"rendered": str(path)}
+        return {"rendered": str(path), "engine": bpy.context.scene.render.engine}
+    if command == "visual-test":
+        _create_demo_scene()
+        scene = bpy.context.scene
+        scene.render.resolution_x = 960
+        scene.render.resolution_y = 540
+        scene.render.resolution_percentage = 100
+        project_path = ARTIFACT_DIR / "visual-test.blend"
+        bpy.ops.wm.save_as_mainfile(filepath=str(project_path))
+        render_path = ARTIFACT_DIR / "preview.png"
+        scene.render.filepath = str(render_path)
+        try:
+            bpy.ops.render.render(write_still=True)
+            engine_used = scene.render.engine
+        except Exception as render_error:
+            print("[AI Bridge] Eevee render failed; falling back to Workbench:", render_error)
+            scene.render.engine = "BLENDER_WORKBENCH"
+            bpy.ops.render.render(write_still=True)
+            engine_used = scene.render.engine
+        return {
+            "project": str(project_path),
+            "render": str(render_path),
+            "engine": engine_used,
+            "scene": _scene_info(),
+        }
     if command == "shutdown":
         _STOP.set()
         return {"shutdown": True}
