@@ -193,11 +193,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ffmpeg -y -loglevel warning -f x11grab -draw_mouse 1 -video_size 1600x900 -framerate 6 -i :99.0 \
+          nohup ffmpeg -y -loglevel warning -f x11grab -draw_mouse 1 -video_size 1600x900 -framerate 6 -i :99.0 \
             -an -c:v libx264 -preset ultrafast -crf 30 -pix_fmt yuv420p \
             -movflags +faststart "$BLENDER_ARTIFACT_DIR/full-session.mp4" \
-            > "$RUNNER_TEMP/recording.log" 2>&1 &
+            > "$RUNNER_TEMP/recording.log" 2>&1 < /dev/null &
           echo $! > "$RUNNER_TEMP/recording.pid"
+          disown || true
           sleep 2
           kill -0 "$(cat "$RUNNER_TEMP/recording.pid")"
       - name: Execute requested operation through repository headless client
