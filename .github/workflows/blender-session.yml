@@ -1,11 +1,6 @@
 name: Blender GUI Session
 
 on:
-  push:
-    paths:
-      - ".github/workflows/blender-session.yml"
-      - "session_system/blender_bridge/bridge.py"
-      - "session_system/repo_headless/client.py"
   workflow_dispatch:
     inputs:
       command:
@@ -41,15 +36,8 @@ jobs:
         id: config
         shell: bash
         env:
-          REQUESTED_MINUTES: ${{ inputs.session_minutes }}
           REQUESTED_PROJECT: ${{ inputs.project_path }}
         run: |
-          requested="$REQUESTED_MINUTES"
-          if ! [[ "$requested" =~ ^[0-9]+$ ]]; then requested=10; fi
-          if (( requested < 1 )); then requested=1; fi
-          if (( requested > 60 )); then requested=60; fi
-          echo "minutes=$requested" >> "$GITHUB_OUTPUT"
-
           project="$REQUESTED_PROJECT"
           if [[ -n "$project" ]]; then
             case "$project" in
