@@ -89,4 +89,4 @@ El CLI también admite `visual-test` directamente. Los artefactos se descargan d
 - B ya cuenta con pruebas GUI satisfactorias en Actions.
 - La Release permanente y los seis ZIP de transferencia del run [43805163265](https://github.com/decuvilan-lgtm/Blender-para-ia/actions/runs/43805163265) están publicados.
 - Los seis ZIP de ese run se materializaron en A en `/mnt/data/blender-transfer-run438051/`.
-- **Aún no se ha verificado** la unión, extracción ni ejecución real de Blender en A: la herramienta de shell/Python del runtime devuelve un error de infraestructura. No confundir la transferencia de archivos ni el entorno B con una instalación funcional de A.
+- **A verificado el 2026-11-17:** Blender 4.5.3 LTS completo instalado (1,2 GB), `bpy` importado, escena `.blend` guardada y reabierta y render Workbench PNG generado. Eevee Next sigue pendiente de diagnóstico en A. Ver [registro detallado](../../docs/environment-a-install.md).
