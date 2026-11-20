@@ -187,10 +187,8 @@ scene.frame_set(1)
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out,"anime_girl.blend"))
 scene.render.filepath=os.path.join(out,"anime_girl_preview.png")
 bpy.ops.render.render(write_still=True)
-scene.render.image_settings.file_format='FFMPEG'
-scene.render.ffmpeg.format='MPEG4'
-scene.render.ffmpeg.codec='H264'
-scene.render.ffmpeg.constant_rate_factor='MEDIUM'
-scene.render.filepath=os.path.join(out,"anime_girl_animation")
+# Render numbered PNG frames; the host FFmpeg binary assembles the MP4.
+scene.render.image_settings.file_format='PNG'
+scene.render.filepath=os.path.join(out,"anime_frame_")
 bpy.ops.render.render(animation=True)
 print("ANIME_GIRL_SCENE_COMPLETE", len(bpy.data.objects), out)
