@@ -57,6 +57,25 @@ Una vez instalado y probado el runtime:
 
 El script de creación genera una escena con suelo, cubo, esfera, toroide, rótulo, cámara y luces, guarda el proyecto `.blend` y renderiza una imagen PNG.
 
+## Usar Actions como ojos visuales de Blender (Entorno B)
+
+El workflow `.github/workflows/blender-session.yml` mantiene una instancia gráfica real de Blender 4.5.3 dentro de GitHub Actions (Xvfb + Openbox) y permite controlarla mediante el puente local autenticado.
+
+### Prueba visual automatizada
+
+En Actions → **Blender GUI Session**, seleccionar `visual-test`. También se inicia automáticamente al modificar el workflow o los archivos del puente. La operación:
+
+1. Crea una escena de prueba con cubo, cámara y luz.
+2. Guarda `visual-test.blend`.
+3. Renderiza `preview.png` con Eevee Next; si el motor devuelve una excepción, intenta Workbench.
+4. Devuelve metadatos de la escena (objetos, cámara, motor, resolución y versión).
+5. Captura el escritorio X11 como `desktop.png` y graba un vídeo breve de la sesión.
+6. Publica el proyecto, el render, las capturas, el vídeo y los logs en el artefacto `blender-session-evidence`.
+
+El CLI también admite `visual-test` directamente. Los artefactos se descargan desde el resumen de la ejecución de Actions y se pueden inspeccionar aquí para validar visualmente el resultado. El PNG renderizado es la evidencia principal del contenido; `desktop.png` demuestra qué estaba mostrando la interfaz gráfica.
+
+**Primera ejecución de esta ruta:** [run 44644302051](https://github.com/decuvilan-lgtm/Blender-para-ia/actions/runs/44644302051). Su resultado debe comprobarse antes de considerar validada la ruta completa.
+
 ## Transferir a B
 
 1. Comprueba que el `.blend` y su PNG existan y tengan tamaño no nulo.
