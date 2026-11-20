@@ -1,6 +1,9 @@
 name: Blender Live Session
 
 on:
+  push:
+    paths:
+      - ".github/workflows/blender-live-session.yml"
   workflow_dispatch:
     inputs:
       project_path:
