@@ -25,23 +25,14 @@ on:
         required: false
         type: string
         default: ""
-      session_minutes:
-        description: "Maximum session duration (1-60 minutes)"
-        required: true
-        type: number
-        default: 30
 
 permissions:
   contents: read
 
-concurrency:
-  group: blender-gui-session
-  cancel-in-progress: false
-
 jobs:
   blender-session:
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 360
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -230,23 +221,18 @@ jobs:
             exit 1
           fi
 
-      - name: Keep session alive for configured duration
+      - name: Keep Blender session alive until manually cancelled
         if: success()
+        shell: bash
         run: |
-          target=$(( ${{ steps.config.outputs.minutes }} * 60 ))
-          started="${BLENDER_SESSION_STARTED_AT:-$(date +%s)}"
+          echo "Blender is ready. This job stays alive until the workflow is manually cancelled."
+          echo "GitHub-hosted runner hard limit: 6 hours. For longer sessions use a self-hosted runner."
           while true; do
-            now=$(date +%s)
-            elapsed=$((now - started))
-            (( elapsed >= target )) && break
             if ! kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; then
-              echo "Blender exited before the session window ended."
+              echo "Blender exited; ending session."
               exit 1
             fi
-            remaining=$((target - elapsed))
-            sleep_for=10
-            (( remaining < sleep_for )) && sleep_for=$remaining
-            sleep "$sleep_for"
+            sleep 15
           done
 
       - name: Stop full-session video recording
