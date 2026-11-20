@@ -278,6 +278,15 @@ jobs:
           cp -R ai_lab/experimental "$RUNNER_TEMP/package/"
           tar -czf "$RUNNER_TEMP/experimental-blender-lab.tar.gz" -C "$RUNNER_TEMP/package" .
 
+      - name: Prepare browser video viewer
+        if: always()
+        run: |
+          cp session_system/viewer/index.html "$RUNNER_TEMP/blender-artifacts/index.html"
+          cat > "$RUNNER_TEMP/blender-artifacts/README.txt" <<\x27EOF\x27
+          Open index.html in a browser to watch the complete Blender desktop recording.
+          full-session.mp4 is captured from the actual X11 desktop during the session.
+          preview.png is Blender\x27s rendered output; desktop.png is the GUI screenshot.
+          EOF
       - name: Upload session evidence
         if: always()
         uses: actions/upload-artifact@v4
