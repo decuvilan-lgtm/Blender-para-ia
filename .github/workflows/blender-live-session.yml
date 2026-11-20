@@ -1,0 +1,162 @@
+name: Blender Live Session
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_path:
+        description: "Optional .blend project in the repository"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  blender-live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate project and install remote desktop
+        env:
+          REQUESTED_PROJECT: ${{ inputs.project_path }}
+        run: |
+          set -euo pipefail
+          project="$REQUESTED_PROJECT"
+          if [[ -n "$project" ]]; then
+            case "$project" in /*|*..*|*\\*) echo "Unsafe project path" >&2; exit 1;; esac
+            [[ "$project" == *.blend && -f "$project" ]] || { echo "Project .blend not found"; exit 1; }
+          fi
+          echo "PROJECT_PATH=$project" >> "$GITHUB_ENV"
+          sudo apt-get update
+          sudo apt-get install -y xvfb openbox wmctrl xdotool x11-utils x11-xserver-utils mesa-utils libgl1-mesa-dri libgl1 libegl1 libxi6 libxrender1 libxkbcommon0 libxkbcommon-x11-0 libsm6 libxfixes3 ffmpeg x11vnc novnc websockify nginx
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --upgrade pip pillow mss
+          echo "PYTHON_BIN=$RUNNER_TEMP/venv/bin/python" >> "$GITHUB_ENV"
+          curl --fail --location --retry 3 "https://download.blender.org/release/Blender4.5/blender-4.5.3-linux-x64.tar.xz" -o "$RUNNER_TEMP/blender.tar.xz"
+          mkdir -p "$RUNNER_TEMP/blender"
+          tar -xf "$RUNNER_TEMP/blender.tar.xz" -C "$RUNNER_TEMP/blender"
+          echo "BLENDER_BIN=$RUNNER_TEMP/blender/blender-4.5.3-linux-x64/blender" >> "$GITHUB_ENV"
+          curl --fail --location --retry 3 "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" -o "$RUNNER_TEMP/cloudflared"
+          chmod +x "$RUNNER_TEMP/cloudflared"
+
+      - name: Start Blender GUI and authenticated remote desktop
+        env:
+          BLENDER_BRIDGE_TOKEN: ${{ secrets.BLENDER_BRIDGE_TOKEN || github.run_id }}
+          BLENDER_REMOTE_API_TOKEN: ${{ secrets.BLENDER_REMOTE_API_TOKEN || github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          mkdir -p "$RUNNER_TEMP/blender-artifacts"
+          Xvfb :99 -screen 0 1600x900x24 +extension GLX +render -noreset > "$RUNNER_TEMP/xvfb.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/xvfb.pid"
+          for i in $(seq 1 30); do xdpyinfo -display :99 >/dev/null 2>&1 && break; sleep 1; done
+          openbox > "$RUNNER_TEMP/openbox.log" 2>&1 & echo $! > "$RUNNER_TEMP/openbox.pid"
+          sleep 2
+          args=(--window-geometry 0 0 1600 900 --window-maximized)
+          if [[ -n "$PROJECT_PATH" ]]; then args=("$PROJECT_PATH" "${args[@]}"); else args=(--factory-startup "${args[@]}"); fi
+          args+=(--python session_system/blender_bridge/bridge.py)
+          export BLENDER_BRIDGE_PORT=8765 BLENDER_ARTIFACT_DIR="$RUNNER_TEMP/blender-artifacts"
+          "$BLENDER_BIN" "${args[@]}" > "$RUNNER_TEMP/blender.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/blender.pid"
+          echo "BLENDER_BRIDGE_TOKEN=$BLENDER_BRIDGE_TOKEN" >> "$GITHUB_ENV"
+          echo "BLENDER_REMOTE_API_TOKEN=$BLENDER_REMOTE_API_TOKEN" >> "$GITHUB_ENV"
+          for i in $(seq 1 60); do "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 3 && break; sleep 2; done
+          "$PYTHON_BIN" session_system/repo_headless/client.py ping --timeout 5
+
+          # Protect the VNC protocol with a random, per-run password.
+          VNC_PASSWORD="$(openssl rand -hex 8)"
+          echo "$VNC_PASSWORD" > "$RUNNER_TEMP/vnc-password"
+          x11vnc -display :99 -forever -shared -rfbport 5900 -passwd "$VNC_PASSWORD" -localhost -nopw -noxdamage > "$RUNNER_TEMP/x11vnc.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/x11vnc.pid"
+          websockify --web=/usr/share/novnc/ 6080 localhost:5900 > "$RUNNER_TEMP/websockify.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/websockify.pid"
+
+          # Single HTTPS entry point: control page/API and noVNC websocket.
+          sudo tee /etc/nginx/sites-available/blender-live >/dev/null <<'NGINX'
+          server {
+            listen 8080;
+            server_name _;
+            location /api/ {
+              proxy_pass http://127.0.0.1:8766/api/;
+              proxy_set_header Host $host;
+            }
+            location /websockify {
+              proxy_pass http://127.0.0.1:6080/websockify;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "Upgrade";
+            }
+            location / {
+              proxy_pass http://127.0.0.1:6080/;
+              proxy_set_header Host $host;
+            }
+          }
+          NGINX
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo ln -sf /etc/nginx/sites-available/blender-live /etc/nginx/sites-enabled/blender-live
+          sudo nginx -t && sudo systemctl restart nginx
+
+          export GITHUB_WORKSPACE="$GITHUB_WORKSPACE"
+          export BLENDER_CLIENT="$PYTHON_BIN"
+          nohup "$PYTHON_BIN" session_system/remote/control_server.py > "$RUNNER_TEMP/control-api.log" 2>&1 < /dev/null &
+          echo $! > "$RUNNER_TEMP/control-api.pid"
+          nohup "$RUNNER_TEMP/cloudflared" tunnel --no-autoupdate --url http://127.0.0.1:8080 > "$RUNNER_TEMP/cloudflared.log" 2>&1 < /dev/null &
+          echo $! > "$RUNNER_TEMP/cloudflared.pid"
+          for i in $(seq 1 60); do
+            URL="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "$RUNNER_TEMP/cloudflared.log" | head -n1 || true)"
+            [[ -n "$URL" ]] && break
+            sleep 2
+          done
+          if [[ -z "${URL:-}" ]]; then cat "$RUNNER_TEMP/cloudflared.log"; exit 1; fi
+          echo "::notice title=Blender Live URL::$URL/#$BLENDER_REMOTE_API_TOKEN"
+          echo "::notice title=VNC password::$VNC_PASSWORD"
+          echo "Remote session ready: $URL"
+          echo "VNC password: $VNC_PASSWORD"
+          echo "Live control link: $URL/#$BLENDER_REMOTE_API_TOKEN"
+
+      - name: Start full-session recording
+        run: |
+          set -euo pipefail
+          nohup ffmpeg -y -loglevel warning -f x11grab -draw_mouse 1 -video_size 1600x900 -framerate 6 -i :99.0 -an -c:v libx264 -preset ultrafast -crf 30 -pix_fmt yuv420p -movflags +faststart "$RUNNER_TEMP/blender-artifacts/full-session.mp4" > "$RUNNER_TEMP/recording.log" 2>&1 < /dev/null &
+          echo $! > "$RUNNER_TEMP/recording.pid"
+          disown || true
+
+      - name: Keep the live Blender session available
+        shell: bash
+        run: |
+          echo "Session is live. Use the URL and VNC password in the previous step logs."
+          echo "This temporary GitHub-hosted runner has a six-hour maximum."
+          while kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; do sleep 15; done
+          echo "Blender exited; ending session."
+          exit 1
+
+      - name: Capture final evidence and stop services
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/blender-artifacts"
+          if [[ -f "$RUNNER_TEMP/recording.pid" ]]; then kill -INT "$(cat "$RUNNER_TEMP/recording.pid")" 2>/dev/null || true; sleep 3; fi
+          if [[ -f "$RUNNER_TEMP/blender.pid" ]] && kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null; then
+            "$PYTHON_BIN" session_system/repo_headless/client.py save --timeout 30 || true
+            "$PYTHON_BIN" session_system/scripts/capture_screen.py "$RUNNER_TEMP/blender-artifacts/desktop.png" || true
+          fi
+          cp "$RUNNER_TEMP"/blender.log "$RUNNER_TEMP"/xvfb.log "$RUNNER_TEMP"/openbox.log "$RUNNER_TEMP"/recording.log "$RUNNER_TEMP"/cloudflared.log "$RUNNER_TEMP/blender-artifacts/" 2>/dev/null || true
+          cp "$RUNNER_TEMP/vnc-password" "$RUNNER_TEMP/blender-artifacts/" 2>/dev/null || true
+          cp session_system/viewer/index.html "$RUNNER_TEMP/blender-artifacts/index.html"
+          for f in "$RUNNER_TEMP"/*.pid; do [[ -f "$f" ]] && kill "$(cat "$f")" 2>/dev/null || true; done
+          [[ -f "$RUNNER_TEMP/blender.pid" ]] && kill "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || true
+          [[ -f "$RUNNER_TEMP/openbox.pid" ]] && kill "$(cat "$RUNNER_TEMP/openbox.pid")" 2>/dev/null || true
+          [[ -f "$RUNNER_TEMP/xvfb.pid" ]] && kill "$(cat "$RUNNER_TEMP/xvfb.pid")" 2>/dev/null || true
+
+      - name: Upload session artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-live-session-evidence
+          path: ${{ runner.temp }}/blender-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
