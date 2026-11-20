@@ -26,10 +26,10 @@ on:
         type: string
         default: ""
       session_minutes:
-        description: "Maximum session duration (1-10 minutes)"
+        description: "Maximum session duration (1-60 minutes)"
         required: true
         type: number
-        default: 10
+        default: 30
 
 permissions:
   contents: read
@@ -41,7 +41,7 @@ concurrency:
 jobs:
   blender-session:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 75
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,7 +56,7 @@ jobs:
           requested="$REQUESTED_MINUTES"
           if ! [[ "$requested" =~ ^[0-9]+$ ]]; then requested=10; fi
           if (( requested < 1 )); then requested=1; fi
-          if (( requested > 10 )); then requested=10; fi
+          if (( requested > 60 )); then requested=60; fi
           echo "minutes=$requested" >> "$GITHUB_OUTPUT"
 
           project="$REQUESTED_PROJECT"
