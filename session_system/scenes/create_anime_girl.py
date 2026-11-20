@@ -158,23 +158,41 @@ scene.view_settings.view_transform='AgX'
 scene.render.image_settings.color_mode='RGBA'
 scene.camera.data.lens=50
 
-# Animate a gentle greeting: right forearm/hand wave and subtle head tilt.
+# Animate a readable greeting: raise the right arm, wave the hand, and blink once.
 wave=bpy.data.objects.get("Forearm R")
 hand=bpy.data.objects.get("Hand R")
 head_obj=bpy.data.objects.get("Head")
+base_wave=wave.location.copy()
+base_hand=hand.location.copy()
 scene.frame_start=1
-scene.frame_end=48
+scene.frame_end=72
 scene.render.fps=24
-for frame, angle in ((1,0.0),(10,0.0),(18,-0.7),(24,0.45),(30,-0.65),(38,0.25),(48,0.0)):
+wave_keys=((1,0.00,0.00,0.0),(12,0.05,0.12,-0.35),(20,0.12,0.22,0.55),
+           (28,0.05,0.16,-0.60),(36,0.12,0.22,0.60),(44,0.05,0.16,-0.60),
+           (56,0.12,0.22,0.60),(64,0.04,0.12,-0.35),(72,0.00,0.00,0.0))
+for frame, dx, dz, angle in wave_keys:
     scene.frame_set(frame)
+    wave.location=(base_wave.x+dx,base_wave.y,base_wave.z+dz*0.65)
     wave.rotation_euler[1]=angle
+    wave.keyframe_insert(data_path="location",frame=frame)
     wave.keyframe_insert(data_path="rotation_euler",frame=frame)
-    hand.rotation_euler[1]=angle*0.6
+    hand.location=(base_hand.x+dx*1.5,base_hand.y,base_hand.z+dz)
+    hand.rotation_euler[1]=angle*0.7
+    hand.keyframe_insert(data_path="location",frame=frame)
     hand.keyframe_insert(data_path="rotation_euler",frame=frame)
-for frame, angle in ((1,0.0),(24,0.045),(48,0.0)):
+for frame, angle in ((1,0.0),(36,0.045),(72,0.0)):
     scene.frame_set(frame)
     head_obj.rotation_euler[2]=angle
     head_obj.keyframe_insert(data_path="rotation_euler",frame=frame)
+# Brief blink at the midpoint.
+for name in ("Eye white L","Eye white R","Blue iris L","Blue iris R","Pupil L","Pupil R"):
+    eye=bpy.data.objects.get(name)
+    if eye:
+        original=eye.scale.z
+        for frame, factor in ((1,1.0),(33,1.0),(35,0.12),(37,1.0),(72,1.0)):
+            scene.frame_set(frame)
+            eye.scale.z=original*factor
+            eye.keyframe_insert(data_path="scale",frame=frame)
 if scene.animation_data and scene.animation_data.action:
     for fc in scene.animation_data.action.fcurves:
         for kp in fc.keyframe_points:
